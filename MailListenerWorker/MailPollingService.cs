@@ -12,12 +12,14 @@ public class MailPollingService : BackgroundService
 {
     private readonly ILogger<MailPollingService> _logger;
     private readonly GraphServiceClient _graphClient;
+    private readonly AzureDevOpsService _adoService;
     private readonly string _mailboxUser;
     private readonly string _htmlTemplate;
 
-    public MailPollingService(ILogger<MailPollingService> logger, IConfiguration configuration)
+    public MailPollingService(ILogger<MailPollingService> logger, IConfiguration configuration, AzureDevOpsService adoService)
     {
         _logger = logger;
+        _adoService = adoService;
 
         var tenantId = configuration["AzureAd:TenantId"];
         var clientId = configuration["AzureAd:ClientId"];
@@ -45,6 +47,7 @@ public class MailPollingService : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             await PollMailboxAsync(stoppingToken);
+            await PollWorkItemUpdatesAsync(stoppingToken);
             await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         }
 
@@ -81,6 +84,73 @@ public class MailPollingService : BackgroundService
         }
     }
 
+    private async Task PollWorkItemUpdatesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var updatedItems = await _adoService.GetUpdatedWorkItemsAsync("AutoCreated", cancellationToken);
+            foreach (var item in updatedItems)
+            {
+                if (item.Id == null) continue;
+
+                if (item.Fields.TryGetValue("System.State", out var stateObj) && 
+                    item.Fields.TryGetValue("System.Tags", out var tagsObj))
+                {
+                    var state = stateObj?.ToString() ?? "Unknown";
+                    var tags = tagsObj?.ToString() ?? "";
+                    
+                    // We remove spaces to make a valid tag, e.g. "To Do" -> "EmailSent_ToDo" -> "EmailSent_ToDo" (wait, tags can have spaces but let's remove them for the flag)
+                    var stateTag = state.Replace(" ", "");
+                    var expectedTag = $"EmailSent_{stateTag}";
+
+                    if (!tags.Contains(expectedTag))
+                    {
+                        if (item.Fields.TryGetValue("System.Description", out var descObj))
+                        {
+                            var description = descObj?.ToString() ?? "";
+                            var email = ExtractHtmlAttribute(description, "data-sender-email");
+                            var name = ExtractHtmlAttribute(description, "data-sender-name");
+                            var title = item.Fields.TryGetValue("System.Title", out var tObj) 
+                                ? tObj?.ToString()?.Replace("[EMAIL] ", "") 
+                                : "Your Request";
+
+                            if (!string.IsNullOrEmpty(email))
+                            {
+                                await SendAutoReplyAsync(
+                                    email, 
+                                    string.IsNullOrEmpty(name) ? "User" : name, 
+                                    title, 
+                                    item.Id.Value.ToString(), 
+                                    state, 
+                                    cancellationToken);
+                                
+                                await _adoService.AddWorkItemTagAsync(item.Id.Value, tags, expectedTag, cancellationToken);
+                                _logger.LogInformation("Sent state update for WorkItem #{Id} to {State} ({Email})", item.Id, state, email);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while polling work item updates");
+        }
+    }
+
+    private static string ExtractHtmlAttribute(string html, string attributeName)
+    {
+        var searchString = $"{attributeName}=\"";
+        var startIndex = html.IndexOf(searchString);
+        if (startIndex == -1) return string.Empty;
+
+        startIndex += searchString.Length;
+        var endIndex = html.IndexOf("\"", startIndex);
+        if (endIndex == -1) return string.Empty;
+
+        return html.Substring(startIndex, endIndex - startIndex);
+    }
+
     private async Task ProcessEmailAsync(Message msg, CancellationToken cancellationToken)
     {
         var senderEmail = msg.From?.EmailAddress?.Address;
@@ -92,11 +162,51 @@ public class MailPollingService : BackgroundService
             senderEmail,
             msg.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss"));
 
+        // Fetch the full message to get the Body details
+        var fullMessage = await _graphClient
+            .Users[_mailboxUser]
+            .Messages[msg.Id]
+            .GetAsync(config =>
+            {
+                config.QueryParameters.Select = ["id", "subject", "body"];
+            }, cancellationToken);
+
+        var emailBody = fullMessage?.Body?.Content ?? msg.BodyPreview ?? "No content";
+        var workItemId = 0;
+        var initialState = "To Do";
+
+        try
+        {
+            // Create Azure DevOps work item
+            var createdItem = await _adoService.CreateEmailWorkItemAsync(
+                msg.Subject ?? "No Subject",
+                emailBody,
+                senderEmail ?? "Unknown",
+                senderName ?? "Unknown",
+                msg.ReceivedDateTime,
+                cancellationToken);
+                
+            workItemId = createdItem.Id ?? 0;
+            if (createdItem.Fields.TryGetValue("System.State", out var stateObj))
+            {
+                initialState = stateObj?.ToString() ?? "To Do";
+            }
+
+            _logger.LogInformation(
+                "Created ADO work item #{WorkItemId} for email from {Email}",
+                workItemId,
+                senderEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create ADO work item for email: {Subject}", msg.Subject);
+        }
+
         // TODO: Call Python Agent A (via HTTP) and store in SQL database
 
-        if (!string.IsNullOrEmpty(senderEmail))
+        if (!string.IsNullOrEmpty(senderEmail) && workItemId > 0)
         {
-            await SendAutoReplyAsync(senderEmail, senderName!, msg.Subject, cancellationToken);
+            await SendAutoReplyAsync(senderEmail, senderName!, msg.Subject, workItemId.ToString(), initialState, cancellationToken);
             _logger.LogInformation("Auto-reply sent to: {Email}", senderEmail);
         }
 
@@ -117,14 +227,16 @@ public class MailPollingService : BackgroundService
         string recipientEmail,
         string recipientName,
         string? originalSubject,
+        string ticketId,
+        string ticketStatus,
         CancellationToken cancellationToken)
     {
-        var ticketNumber = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
         var subject = originalSubject ?? "Your Request";
 
         var htmlContent = _htmlTemplate
             .Replace("{{RecipientName}}", recipientName)
-            .Replace("{{TicketNumber}}", ticketNumber)
+            .Replace("{{TicketNumber}}", ticketId)
+            .Replace("{{TicketStatus}}", ticketStatus)
             .Replace("{{OriginalSubject}}", subject)
             .Replace("{{Year}}", DateTime.UtcNow.Year.ToString())
             .Replace("{{SupportEmail}}", _mailboxUser)
@@ -132,7 +244,7 @@ public class MailPollingService : BackgroundService
 
         var replyMessage = new Message
         {
-            Subject = $"Re: {subject} [{ticketNumber}]",
+            Subject = $"Re: {subject} [TKT-{ticketId}]",
             Body = new ItemBody
             {
                 ContentType = BodyType.Html,
