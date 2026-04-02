@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using System.Reflection;
+using MailListenerWorker.Services;
+using MailListenerWorker.Models;
 
 namespace MailListenerWorker;
 
@@ -13,19 +15,38 @@ public class MailPollingService : BackgroundService
     private readonly ILogger<MailPollingService> _logger;
     private readonly GraphServiceClient _graphClient;
     private readonly AzureDevOpsService _adoService;
+    private readonly GroqLlmService _llmService;
+    private readonly JobFieldMappingService _jobFieldService;
+    private readonly TeamsChatService _teamsChatService;
     private readonly string _mailboxUser;
+    private readonly string _defaultAssignee;
+    private readonly string _logoUrl;
+    private readonly string _supportPhone;
     private readonly string _htmlTemplate;
 
-    public MailPollingService(ILogger<MailPollingService> logger, IConfiguration configuration, AzureDevOpsService adoService)
+    public MailPollingService(
+        ILogger<MailPollingService> logger,
+        IConfiguration configuration,
+        AzureDevOpsService adoService,
+        GroqLlmService llmService,
+        JobFieldMappingService jobFieldService,
+        TeamsChatService teamsChatService)
     {
         _logger = logger;
         _adoService = adoService;
+        _llmService = llmService;
+        _jobFieldService = jobFieldService;
+        _teamsChatService = teamsChatService;
 
         var tenantId = configuration["AzureAd:TenantId"];
         var clientId = configuration["AzureAd:ClientId"];
         var clientSecret = configuration["AzureAd:ClientSecret"];
         _mailboxUser = configuration["AzureAd:MailboxUser"]
             ?? throw new InvalidOperationException("Missing AzureAd:MailboxUser setting.");
+        _defaultAssignee = configuration["JobFieldCsv:DefaultAssignee"]
+            ?? throw new InvalidOperationException("Missing JobFieldCsv:DefaultAssignee setting.");
+        _logoUrl = configuration["Email:LogoUrl"] ?? "https://via.placeholder.com/150x40?text=Support";
+        _supportPhone = configuration["Email:SupportPhone"] ?? "+216 56 646 677";
 
         if (string.IsNullOrWhiteSpace(tenantId) ||
             string.IsNullOrWhiteSpace(clientId) ||
@@ -93,13 +114,13 @@ public class MailPollingService : BackgroundService
             {
                 if (item.Id == null) continue;
 
-                if (item.Fields.TryGetValue("System.State", out var stateObj) && 
+                if (item.Fields.TryGetValue("System.State", out var stateObj) &&
                     item.Fields.TryGetValue("System.Tags", out var tagsObj))
                 {
                     var state = stateObj?.ToString() ?? "Unknown";
                     var tags = tagsObj?.ToString() ?? "";
-                    
-                    // We remove spaces to make a valid tag, e.g. "To Do" -> "EmailSent_ToDo" -> "EmailSent_ToDo" (wait, tags can have spaces but let's remove them for the flag)
+
+                    // We remove spaces to make a valid tag, e.g. "To Do" -> "EmailSent_ToDo"
                     var stateTag = state.Replace(" ", "");
                     var expectedTag = $"EmailSent_{stateTag}";
 
@@ -110,20 +131,21 @@ public class MailPollingService : BackgroundService
                             var description = descObj?.ToString() ?? "";
                             var email = ExtractHtmlAttribute(description, "data-sender-email");
                             var name = ExtractHtmlAttribute(description, "data-sender-name");
-                            var title = item.Fields.TryGetValue("System.Title", out var tObj) 
-                                ? tObj?.ToString()?.Replace("[EMAIL] ", "") 
+                            var title = item.Fields.TryGetValue("System.Title", out var tObj)
+                                ? tObj?.ToString()?.Replace("[EMAIL] ", "")
                                 : "Your Request";
 
                             if (!string.IsNullOrEmpty(email))
                             {
                                 await SendAutoReplyAsync(
-                                    email, 
-                                    string.IsNullOrEmpty(name) ? "User" : name, 
-                                    title, 
-                                    item.Id.Value.ToString(), 
-                                    state, 
+                                    email,
+                                    string.IsNullOrEmpty(name) ? "User" : name,
+                                    title,
+                                    item.Id.Value.ToString(),
+                                    state,
+                                    null,
                                     cancellationToken);
-                                
+
                                 await _adoService.AddWorkItemTagAsync(item.Id.Value, tags, expectedTag, cancellationToken);
                                 _logger.LogInformation("Sent state update for WorkItem #{Id} to {State} ({Email})", item.Id, state, email);
                             }
@@ -174,18 +196,31 @@ public class MailPollingService : BackgroundService
         var emailBody = fullMessage?.Body?.Content ?? msg.BodyPreview ?? "No content";
         var workItemId = 0;
         var initialState = "To Do";
+        ExtractedEmailData? extractedData = null;
 
         try
         {
-            // Create Azure DevOps work item
+            // Analyze email with Groq LLM to extract key information
+            extractedData = await _llmService.AnalyzeEmailAsync(
+                msg.Subject ?? "No Subject",
+                emailBody,
+                cancellationToken);
+
+            // Resolve assignee based on extracted job field
+            var assigneeEmail = _jobFieldService.ResolveEmail(extractedData.JobField, _defaultAssignee);
+            var jobFieldMapping = _jobFieldService.GetMapping(extractedData.JobField);
+
+            // Create Azure DevOps work item with extracted data
             var createdItem = await _adoService.CreateEmailWorkItemAsync(
                 msg.Subject ?? "No Subject",
                 emailBody,
                 senderEmail ?? "Unknown",
                 senderName ?? "Unknown",
                 msg.ReceivedDateTime,
+                extractedData,
+                assigneeEmail,
                 cancellationToken);
-                
+
             workItemId = createdItem.Id ?? 0;
             if (createdItem.Fields.TryGetValue("System.State", out var stateObj))
             {
@@ -193,20 +228,54 @@ public class MailPollingService : BackgroundService
             }
 
             _logger.LogInformation(
-                "Created ADO work item #{WorkItemId} for email from {Email}",
+                "Created ADO work item #{WorkItemId} for email from {Email} (Severity: {Severity}, Priority: {Priority}, JobField: {JobField}, Assignee: {Assignee})",
                 workItemId,
-                senderEmail);
+                senderEmail,
+                extractedData.Severity,
+                extractedData.GetPriority(),
+                extractedData.JobField,
+                assigneeEmail);
+
+            // Send Teams notification to channel
+            await _teamsChatService.SendIssueNotificationAsync(
+                jobFieldMapping?.TeamId ?? "",
+                jobFieldMapping?.ChannelId ?? "",
+                workItemId.ToString(),
+                extractedData.CoreProblem,
+                extractedData.Severity,
+                extractedData.EstimatedHours,
+                jobFieldMapping?.Department ?? extractedData.JobField,
+                senderName,
+                cancellationToken);
+
+            // Send email notification to assignee (if different from default)
+            if (!assigneeEmail.Equals(_defaultAssignee, StringComparison.OrdinalIgnoreCase))
+            {
+                await SendAssigneeNotificationAsync(
+                    assigneeEmail,
+                    workItemId.ToString(),
+                    extractedData.CoreProblem,
+                    senderName,
+                    extractedData.Severity,
+                    extractedData.EstimatedHours,
+                    cancellationToken);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create ADO work item for email: {Subject}", msg.Subject);
         }
 
-        // TODO: Call Python Agent A (via HTTP) and store in SQL database
-
         if (!string.IsNullOrEmpty(senderEmail) && workItemId > 0)
         {
-            await SendAutoReplyAsync(senderEmail, senderName!, msg.Subject, workItemId.ToString(), initialState, cancellationToken);
+            await SendAutoReplyAsync(
+                senderEmail,
+                senderName!,
+                msg.Subject,
+                workItemId.ToString(),
+                initialState,
+                extractedData,
+                cancellationToken);
             _logger.LogInformation("Auto-reply sent to: {Email}", senderEmail);
         }
 
@@ -229,18 +298,29 @@ public class MailPollingService : BackgroundService
         string? originalSubject,
         string ticketId,
         string ticketStatus,
+        ExtractedEmailData? extractedData,
         CancellationToken cancellationToken)
     {
         var subject = originalSubject ?? "Your Request";
 
+        var estimatedHours = extractedData?.EstimatedHours.ToString() ?? "4";
+        var severity = extractedData?.Severity ?? "Medium";
+        var severityClass = severity.ToLower();
+        var expectedResponseTime = extractedData?.GetExpectedResponseHours().ToString() ?? "24";
+
         var htmlContent = _htmlTemplate
+            .Replace("{{LogoUrl}}", _logoUrl)
             .Replace("{{RecipientName}}", recipientName)
             .Replace("{{TicketNumber}}", ticketId)
             .Replace("{{TicketStatus}}", ticketStatus)
             .Replace("{{OriginalSubject}}", subject)
             .Replace("{{Year}}", DateTime.UtcNow.Year.ToString())
             .Replace("{{SupportEmail}}", _mailboxUser)
-            .Replace("{{SupportPhone}}", "+216 56 646 677");
+            .Replace("{{SupportPhone}}", _supportPhone)
+            .Replace("{{EstimatedHours}}", estimatedHours)
+            .Replace("{{Severity}}", severity)
+            .Replace("{{SeverityClass}}", severityClass)
+            .Replace("{{ExpectedResponseTime}}", expectedResponseTime);
 
         var replyMessage = new Message
         {
@@ -271,6 +351,88 @@ public class MailPollingService : BackgroundService
                 Message = replyMessage,
                 SaveToSentItems = true
             }, cancellationToken: cancellationToken);
+    }
+
+    private async Task SendAssigneeNotificationAsync(
+        string assigneeEmail,
+        string ticketId,
+        string ticketTitle,
+        string senderName,
+        string severity,
+        int estimatedHours,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var notificationBody = $"""
+            <html>
+            <body style='font-family: Calibri, Arial, sans-serif; color: #333;'>
+                <p>A new support ticket has been assigned to you:</p>
+
+                <table style='border-collapse: collapse; margin: 20px 0;'>
+                    <tr>
+                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Ticket #:</td>
+                        <td style='padding: 8px;'>{ticketId}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Title:</td>
+                        <td style='padding: 8px;'>{ticketTitle}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Reporter:</td>
+                        <td style='padding: 8px;'>{senderName}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Severity:</td>
+                        <td style='padding: 8px;'>{severity}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Est. Time:</td>
+                        <td style='padding: 8px;'>{estimatedHours} hours</td>
+                    </tr>
+                </table>
+
+                <p><a href='https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{ticketId}' style='color: #0078d4; text-decoration: none;'>
+                    <strong>View Ticket in Azure DevOps →</strong>
+                </a></p>
+
+                <p>Please review and start working on this issue.</p>
+            </body>
+            </html>
+            """;
+
+            var message = new Message
+            {
+                Subject = $"[TKT-{ticketId}] New ticket assigned: {ticketTitle}",
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = notificationBody
+                },
+                ToRecipients =
+                [
+                    new Recipient
+                    {
+                        EmailAddress = new EmailAddress { Address = assigneeEmail }
+                    }
+                ]
+            };
+
+            await _graphClient
+                .Users[_mailboxUser]
+                .SendMail
+                .PostAsync(new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody
+                {
+                    Message = message,
+                    SaveToSentItems = true
+                }, cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Assignee notification sent to {Email} for ticket {TicketId}", assigneeEmail, ticketId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send assignee notification to {Email} for ticket {TicketId}", assigneeEmail, ticketId);
+        }
     }
 
     private static string LoadEmailTemplate()

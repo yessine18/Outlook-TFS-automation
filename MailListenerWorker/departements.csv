@@ -1,0 +1,21 @@
+﻿Job field,User principal name,Department,TeamId,ChannelId
+Administrator,admin@M365x62207154.onmicrosoft.com,Administration,a630fb85-1314-4de8-9adb-9d211353cf64,3SbnzCU2j_HUFPuwnE2Xng7NHkoaelrIli0Tpe9z63E1
+Dynamics/CRM,DynamicsCRM@M365x62207154.onmicrosoft.com,D. Opérations TN / CRM,e5207d21-3abf-4138-a26f-ea0bada356cb,3ZGehf3H1Gxn5WLcNBJtebBpnhmMCiJHBxW0bQ39tXU1
+Database – Oracle,DatabaseOracle@M365x62207154.onmicrosoft.com,Infra & BI,6eff29a9-634b-4fbe-8d5c-16239ad0951b,5Gg-OoIupM1BNSsKsu3N3MwjpqKwQ-_rZ7q_LOhG3Ew1
+QA / Testing,PradeepG@M365x62207154.OnMicrosoft.com,"Business Analyst, QA",fd3f4e5c-382d-4ff9-8599-9e7bd23a79c7,B17mqwOhkzcCiWbDXn014UKdJjbIfms9_EhEw7Wh6EQ1
+BI / Power BI / Reporting,BI@M365x62207154.onmicrosoft.com,Infra & BI,6eff29a9-634b-4fbe-8d5c-16239ad0951b,5Gg-OoIupM1BNSsKsu3N3MwjpqKwQ-_rZ7q_LOhG3Ew1
+Problem Management,ProblemManagement@M365x62207154.onmicrosoft.com,Qualité & Sécurité,b0116666-9da8-43c1-b292-c5b4b50615bf,DCeztZNmqtVT8VcHLGXnjlc8m7980eNPFJfh85cfQHA1
+ERP – SAP,ERPSAP@M365x62207154.onmicrosoft.com,Solutions / SAP,8185d01b-ea6d-4ed3-acf5-cd8ea9c04e7c,FTTepFW8eBkrOSXo88YKGGMafWlwBc81OxwdxfFMAq81
+Active Directory / Entra ID,ActiveDirectoryEntraID@M365x62207154.onmicrosoft.com,Infra & BI,6eff29a9-634b-4fbe-8d5c-16239ad0951b,5Gg-OoIupM1BNSsKsu3N3MwjpqKwQ-_rZ7q_LOhG3Ew1
+Web Applications,WebApplications@M365x62207154.onmicrosoft.com,Technologies / Digital Consulting,6ec34b3d-1bb9-4551-a919-14e1082732dd,GclF07ugout3c-HrZ0jV-bGQqNpS3BxcW0zoAVttE041
+Change Management,ChangeManagement@M365x62207154.OnMicrosoft.com,Project Management,b908144c-da52-4917-a28c-dffc63605676,N7WE-SrX4GRpTQK7IneILbooA41w9zMbaUms2s-Mf741
+Incident Management,IncidentManagement@M365x62207154.onmicrosoft.com,IT Support,ec48d982-b8a4-42f5-95ab-7245fa3cf417,8kaVXOTrycJvtMoq61Tsr2Ln8CNcC4TeRWvHi_Ic0Yg1
+H.E.R.B.I.E,Support@M365x62207154.onmicrosoft.com,Bot,,
+Storage,Storage@M365x62207154.onmicrosoft.com,Infra & BI,6eff29a9-634b-4fbe-8d5c-16239ad0951b,5Gg-OoIupM1BNSsKsu3N3MwjpqKwQ-_rZ7q_LOhG3Ew1
+Service Requests,ServiceRequests@M365x62207154.onmicrosoft.com,IT Support,ec48d982-b8a4-42f5-95ab-7245fa3cf417,8kaVXOTrycJvtMoq61Tsr2Ln8CNcC4TeRWvHi_Ic0Yg1
+Application Support(TMA),ApplicationSupport@M365x62207154.onmicrosoft.com,Support et TMA,5ed960bd-fcf6-40a0-8b2b-14687e5bde4a,T_zIGCm2gqrVWXusZeyvgk5DpMI1QL2kzP6vaEuA1EU1
+Azure DevOps,AzureDevOps@M365x62207154.onmicrosoft.com,Technologies / AS Projets,e44a51b2-2f92-433d-8bd6-45fca65dc184,imlCnZMB_7M6nS2CpN5urDQw4nlO1GLF2GHR41HHfdg1
+Backup / Restore,BackupRestore@M365x62207154.onmicrosoft.com,Infra & BI,6eff29a9-634b-4fbe-8d5c-16239ad0951b,5Gg-OoIupM1BNSsKsu3N3MwjpqKwQ-_rZ7q_LOhG3Ew1
+Monitoring / Observability,MonitoringObservability@M365x62207154.onmicrosoft.com,Infra & BI,6eff29a9-634b-4fbe-8d5c-16239ad0951b,5Gg-OoIupM1BNSsKsu3N3MwjpqKwQ-_rZ7q_LOhG3Ew1
+API Management,APIManagement@M365x62207154.OnMicrosoft.com,Technologies / Digital Consulting,6ec34b3d-1bb9-4551-a919-14e1082732dd,GclF07ugout3c-HrZ0jV-bGQqNpS3BxcW0zoAVttE041
+Linux / Unix,LinuxUnix@M365x62207154.onmicrosoft.com,Infra & BI,6eff29a9-634b-4fbe-8d5c-16239ad0951b,5Gg-OoIupM1BNSsKsu3N3MwjpqKwQ-_rZ7q_LOhG3Ew1
