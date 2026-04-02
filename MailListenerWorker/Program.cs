@@ -6,7 +6,6 @@ using Microsoft.Extensions.Hosting;
 Host.CreateDefaultBuilder(args)
     .ConfigureServices((hostContext, services) =>
     {
-        services.AddHttpClient();
         services.AddSingleton<AzureDevOpsService>();
         services.AddSingleton<GroqLlmService>();
         services.AddSingleton(sp =>
@@ -16,7 +15,6 @@ Host.CreateDefaultBuilder(args)
             var csvPath = configuration["JobFieldCsv:Path"] ?? "departements.csv";
             return new JobFieldMappingService(logger, csvPath);
         });
-        services.AddSingleton<TeamsChatService>();
         services.AddHostedService<MailPollingService>();
     })
     .Build()

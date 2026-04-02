@@ -69,9 +69,7 @@ public class JobFieldMappingService
                 {
                     JobField = record.DisplayName.Trim(),
                     Email = record.Email.Trim(),
-                    Department = record.Department?.Trim() ?? string.Empty,
-                    TeamId = record.TeamId?.Trim() ?? string.Empty,
-                    ChannelId = record.ChannelId?.Trim() ?? string.Empty
+                    Department = record.Department?.Trim() ?? string.Empty
                 };
 
                 _jobFieldCache[mapping.JobField] = mapping;
@@ -134,11 +132,5 @@ public class JobFieldMappingService
 
         [Name("Department")]
         public string Department { get; set; } = string.Empty;
-
-        [Name("TeamId")]
-        public string TeamId { get; set; } = string.Empty;
-
-        [Name("ChannelId")]
-        public string ChannelId { get; set; } = string.Empty;
     }
 }

@@ -17,7 +17,6 @@ public class MailPollingService : BackgroundService
     private readonly AzureDevOpsService _adoService;
     private readonly GroqLlmService _llmService;
     private readonly JobFieldMappingService _jobFieldService;
-    private readonly TeamsChatService _teamsChatService;
     private readonly string _mailboxUser;
     private readonly string _defaultAssignee;
     private readonly string _logoUrl;
@@ -29,14 +28,12 @@ public class MailPollingService : BackgroundService
         IConfiguration configuration,
         AzureDevOpsService adoService,
         GroqLlmService llmService,
-        JobFieldMappingService jobFieldService,
-        TeamsChatService teamsChatService)
+        JobFieldMappingService jobFieldService)
     {
         _logger = logger;
         _adoService = adoService;
         _llmService = llmService;
         _jobFieldService = jobFieldService;
-        _teamsChatService = teamsChatService;
 
         var tenantId = configuration["AzureAd:TenantId"];
         var clientId = configuration["AzureAd:ClientId"];
@@ -235,18 +232,6 @@ public class MailPollingService : BackgroundService
                 extractedData.GetPriority(),
                 extractedData.JobField,
                 assigneeEmail);
-
-            // Send Teams notification to channel
-            await _teamsChatService.SendIssueNotificationAsync(
-                jobFieldMapping?.TeamId ?? "",
-                jobFieldMapping?.ChannelId ?? "",
-                workItemId.ToString(),
-                extractedData.CoreProblem,
-                extractedData.Severity,
-                extractedData.EstimatedHours,
-                jobFieldMapping?.Department ?? extractedData.JobField,
-                senderName,
-                cancellationToken);
 
             // Send email notification to assignee (if different from default)
             if (!assigneeEmail.Equals(_defaultAssignee, StringComparison.OrdinalIgnoreCase))
