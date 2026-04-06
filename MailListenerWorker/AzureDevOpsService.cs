@@ -84,7 +84,7 @@ public class AzureDevOpsService
                 {
                     Operation = Operation.Add,
                     Path = "/fields/System.Tags",
-                    Value = "Email; AutoCreated"
+                    Value = "Email, AutoCreated"
                 }
             };
 
@@ -129,7 +129,7 @@ public class AzureDevOpsService
                 if (createdWorkItem.Fields.TryGetValue("System.State", out var stateObj))
                 {
                     var initialState = stateObj?.ToString()?.Replace(" ", "") ?? "To Do";
-                    var updatedTags = $"Email; AutoCreated; EmailSent_{initialState}";
+                    var updatedTags = $"Email, AutoCreated, EmailSent_{initialState}";
 
                     var tagUpdateDoc = new JsonPatchDocument
                     {
@@ -193,21 +193,37 @@ public class AzureDevOpsService
         return System.Web.HttpUtility.HtmlEncode(text).Replace("\"", "&quot;");
     }
 
+    public async Task<WorkItem?> GetWorkItemByIdAsync(int id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _witClient.GetWorkItemAsync(id, expand: WorkItemExpand.Fields, cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch WorkItem #{Id} directly.", id);
+            return null;
+        }
+    }
+
     public async Task<List<WorkItem>> GetUpdatedWorkItemsAsync(string tagFilter, CancellationToken cancellationToken)
     {
         try
         {
             // Query for Work Items that have 'AutoCreated' tag but we need to check their states
+            // 1. FETCH ALL RECENT ITEMS IN THE PROJECT ─────────────────
             var wiql = new Wiql
             {
                 Query = $"Select [System.Id], [System.State], [System.Tags], [System.Description], [System.Title] " +
                         $"From WorkItems " +
                         $"Where [System.TeamProject] = '{_projectName}' " +
-                        $"And [System.Tags] Contains '{tagFilter}' " +
-                        $"And [System.ChangedDate] > @today - 7"
+                        $"And ([System.Tags] Contains '{tagFilter}' OR [System.WorkItemType] = 'Issue') " +
+                        $"And [System.ChangedDate] > @today - 30"
             };
 
             var result = await _witClient.QueryByWiqlAsync(wiql, cancellationToken: cancellationToken);
+            _logger.LogInformation("WIQL Query found {Count} recent issues to check.", result.WorkItems?.Count() ?? 0);
+
             if (result.WorkItems == null || !result.WorkItems.Any())
                 return new List<WorkItem>();
 

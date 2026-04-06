@@ -5,8 +5,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using MailListenerWorker.Data;
 using MailListenerWorker.Services;
 using MailListenerWorker.Models;
+using MailListenerWorker.Models.Enums;
+using Microsoft.EntityFrameworkCore;
 
 namespace MailListenerWorker;
 
@@ -17,6 +21,7 @@ public class MailPollingService : BackgroundService
     private readonly AzureDevOpsService _adoService;
     private readonly GroqLlmService _llmService;
     private readonly JobFieldMappingService _jobFieldService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly string _mailboxUser;
     private readonly string _defaultAssignee;
     private readonly string _logoUrl;
@@ -30,12 +35,14 @@ public class MailPollingService : BackgroundService
         IConfiguration configuration,
         AzureDevOpsService adoService,
         GroqLlmService llmService,
-        JobFieldMappingService jobFieldService)
+        JobFieldMappingService jobFieldService,
+        IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
         _adoService = adoService;
         _llmService = llmService;
         _jobFieldService = jobFieldService;
+        _scopeFactory = scopeFactory;
 
         var tenantId = configuration["AzureAd:TenantId"];
         var clientId = configuration["AzureAd:ClientId"];
@@ -120,8 +127,48 @@ public class MailPollingService : BackgroundService
                 {
                     var state = stateObj?.ToString() ?? "Unknown";
                     var tags = tagsObj?.ToString() ?? "";
+                    System.IO.File.AppendAllText("sync_debug.log", $"[{DateTime.Now}] Check Item #{item.Id}: State='{state}', Tags='{tags}'\n");
 
-                    // We remove spaces to make a valid tag, e.g. "To Do" -> "EmailSent_ToDo"
+                    // 1. ALWAYS SYNC WITH POSTGRESQL ───────────────────
+                    try
+                    {
+                        using var scope = _scopeFactory.CreateScope();
+                        using var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                        
+                        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.AdoWorkItemId == item.Id, cancellationToken);
+                        if (ticket != null && !string.Equals(ticket.AdoItemState, state, StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogInformation("🔄 Syncing ADO WorkItem #{Id}: DB State '{DbState}' -> ADO State '{AdoState}'", 
+                                item.Id, ticket.AdoItemState, state);
+                            
+                            ticket.AdoItemState = state;
+                            ticket.LastUpdatedAt = DateTime.UtcNow;
+                            
+                            // Update internal status if it reaches terminal ADO states
+                            if (state.Equals("Done", StringComparison.OrdinalIgnoreCase) || 
+                                state.Equals("Closed", StringComparison.OrdinalIgnoreCase))
+                            {
+                                ticket.CurrentPipelineStatus = PipelineStatus.AdoCreated;
+                            }
+
+                            ticket.StateLog.Add(new TicketStateLog
+                            {
+                                LogId = Guid.NewGuid(),
+                                TicketId = ticket.TicketId,
+                                PipelineStatus = ticket.CurrentPipelineStatus,
+                                ErrorMessage = $"ADO State updated to: {state}",
+                                CreatedAt = DateTime.UtcNow
+                            });
+
+                            await db.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    catch (Exception dbEx)
+                    {
+                        _logger.LogError(dbEx, "Failed to sync ADO update to database for WorkItem #{Id}", item.Id);
+                    }
+
+                    // 2. ONLY SEND AUTO-REPLY ONCE PER STATE ───────────
                     var stateTag = state.Replace(" ", "");
                     var expectedTag = $"EmailSent_{stateTag}";
 
@@ -197,6 +244,7 @@ public class MailPollingService : BackgroundService
         var emailBody = fullMessage?.Body?.Content ?? msg.BodyPreview ?? "No content";
         var workItemId = 0;
         var initialState = "To Do";
+        var assigneeEmail = _defaultAssignee;
         ExtractedEmailData? extractedData = null;
 
         try
@@ -208,7 +256,7 @@ public class MailPollingService : BackgroundService
                 cancellationToken);
 
             // Resolve assignee based on extracted job field
-            var assigneeEmail = _jobFieldService.ResolveEmail(extractedData.JobField, _defaultAssignee);
+            assigneeEmail = _jobFieldService.ResolveEmail(extractedData.JobField, _defaultAssignee);
             var jobFieldMapping = _jobFieldService.GetMapping(extractedData.JobField);
 
             // Create Azure DevOps work item with extracted data
@@ -269,6 +317,53 @@ public class MailPollingService : BackgroundService
         }
 
         await MarkAsReadAsync(msg.Id!, cancellationToken);
+
+        // ── PERSIST TO POSTGRESQL ───────────────────
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var ticket = new Ticket
+            {
+                TicketId = Guid.NewGuid(),
+                MessageId = msg.Id ?? "Unknown",
+                SenderEmail = senderEmail ?? "Unknown",
+                Subject = msg.Subject ?? "No Subject",
+                BodyExcerpt = emailBody.Length > 4000 ? emailBody[..3997] + "..." : emailBody,
+                ReceivedAt = msg.ReceivedDateTime?.UtcDateTime ?? DateTime.UtcNow,
+                LastUpdatedAt = DateTime.UtcNow,
+                CurrentPipelineStatus = PipelineStatus.AdoCreated,
+                
+                // Extracted data (if available)
+                ExtractedDepartment = extractedData?.JobField,
+                ExtractedIntent = extractedData?.CoreProblem,
+                LlmConfidenceScore = extractedData != null ? 0.95 : 0.0, // Mocked confidence for now
+                
+                // ADO mapping
+                AdoWorkItemId = workItemId > 0 ? workItemId : null,
+                AdoAssignee = assigneeEmail,
+                AdoItemState = initialState,
+                AdoUrl = workItemId > 0 ? $"https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{workItemId}" : null
+            };
+
+            ticket.StateLog.Add(new TicketStateLog
+            {
+                LogId = Guid.NewGuid(),
+                TicketId = ticket.TicketId,
+                PipelineStatus = PipelineStatus.AdoCreated,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            db.Tickets.Add(ticket);
+            await db.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("✅ Ticket #{WorkItemId} persisted to PostgreSQL database successfully.", workItemId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Failed to persist ticket to PostgreSQL database.");
+        }
     }
 
     private async Task MarkAsReadAsync(string messageId, CancellationToken cancellationToken)
