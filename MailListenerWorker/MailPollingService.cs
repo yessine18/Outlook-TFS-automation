@@ -20,8 +20,10 @@ public class MailPollingService : BackgroundService
     private readonly string _mailboxUser;
     private readonly string _defaultAssignee;
     private readonly string _logoUrl;
+    private readonly string _footerLogoUrl;
     private readonly string _supportPhone;
-    private readonly string _htmlTemplate;
+    private readonly string _autoReplyTemplate;
+    private readonly string _assigneeNotificationTemplate;
 
     public MailPollingService(
         ILogger<MailPollingService> logger,
@@ -43,6 +45,7 @@ public class MailPollingService : BackgroundService
         _defaultAssignee = configuration["JobFieldCsv:DefaultAssignee"]
             ?? throw new InvalidOperationException("Missing JobFieldCsv:DefaultAssignee setting.");
         _logoUrl = configuration["Email:LogoUrl"] ?? "https://via.placeholder.com/150x40?text=Support";
+        _footerLogoUrl = configuration["Email:FooterLogoUrl"] ?? _logoUrl;
         _supportPhone = configuration["Email:SupportPhone"] ?? "+216 56 646 677";
 
         if (string.IsNullOrWhiteSpace(tenantId) ||
@@ -55,7 +58,8 @@ public class MailPollingService : BackgroundService
 
         var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
         _graphClient = new GraphServiceClient(credential, ["https://graph.microsoft.com/.default"]);
-        _htmlTemplate = LoadEmailTemplate();
+        _autoReplyTemplate = LoadEmailTemplate("AutoReplyTemplate.html");
+        _assigneeNotificationTemplate = LoadEmailTemplate("AssigneeNotificationTemplate.html");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -173,7 +177,7 @@ public class MailPollingService : BackgroundService
     private async Task ProcessEmailAsync(Message msg, CancellationToken cancellationToken)
     {
         var senderEmail = msg.From?.EmailAddress?.Address;
-        var senderName = msg.From?.EmailAddress?.Name ?? senderEmail;
+        var senderName = msg.From?.EmailAddress?.Name ?? senderEmail ?? "Unknown";
 
         _logger.LogInformation(
             "New email - Subject: {Subject}, From: {From}, Received: {ReceivedAt}",
@@ -219,7 +223,7 @@ public class MailPollingService : BackgroundService
                 cancellationToken);
 
             workItemId = createdItem.Id ?? 0;
-            if (createdItem.Fields.TryGetValue("System.State", out var stateObj))
+            if (createdItem.Fields != null && createdItem.Fields.TryGetValue("System.State", out var stateObj))
             {
                 initialState = stateObj?.ToString() ?? "To Do";
             }
@@ -234,14 +238,14 @@ public class MailPollingService : BackgroundService
                 assigneeEmail);
 
             // Send email notification to assignee (if different from default)
-            if (!assigneeEmail.Equals(_defaultAssignee, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(assigneeEmail) && !assigneeEmail.Equals(_defaultAssignee, StringComparison.OrdinalIgnoreCase))
             {
                 await SendAssigneeNotificationAsync(
                     assigneeEmail,
                     workItemId.ToString(),
-                    extractedData.CoreProblem,
-                    senderName,
-                    extractedData.Severity,
+                    extractedData.CoreProblem ?? msg.Subject ?? "No Subject",
+                    senderName ?? "Unknown",
+                    extractedData.Severity ?? "Medium",
                     extractedData.EstimatedHours,
                     cancellationToken);
             }
@@ -255,7 +259,7 @@ public class MailPollingService : BackgroundService
         {
             await SendAutoReplyAsync(
                 senderEmail,
-                senderName!,
+                senderName ?? "Unknown",
                 msg.Subject,
                 workItemId.ToString(),
                 initialState,
@@ -293,19 +297,35 @@ public class MailPollingService : BackgroundService
         var severityClass = severity.ToLower();
         var expectedResponseTime = extractedData?.GetExpectedResponseHours().ToString() ?? "24";
 
-        var htmlContent = _htmlTemplate
-            .Replace("{{LogoUrl}}", _logoUrl)
-            .Replace("{{RecipientName}}", recipientName)
-            .Replace("{{TicketNumber}}", ticketId)
-            .Replace("{{TicketStatus}}", ticketStatus)
-            .Replace("{{OriginalSubject}}", subject)
-            .Replace("{{Year}}", DateTime.UtcNow.Year.ToString())
-            .Replace("{{SupportEmail}}", _mailboxUser)
-            .Replace("{{SupportPhone}}", _supportPhone)
-            .Replace("{{EstimatedHours}}", estimatedHours)
-            .Replace("{{Severity}}", severity)
-            .Replace("{{SeverityClass}}", severityClass)
-            .Replace("{{ExpectedResponseTime}}", expectedResponseTime);
+          var ticketUrl = $"https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{ticketId}";
+          
+          // Generate QR Code base64 Data URI
+          var qrCodeResult = await Utilities.QrCodeGenerator.GenerateQrCodeBase64Async(ticketUrl);
+          var qrCodeHtml = string.IsNullOrEmpty(qrCodeResult) ? "" : $@"
+              <div style=""text-align: center; padding-top: 0; margin-bottom: 20px;"">
+                  <div style=""margin: 0 auto; padding: 20px; background: #fff; display: inline-block; border: 1px dashed #ccc; border-radius: 8px;"">
+                      <p style=""font-size: 12px; color: #888; margin-bottom: 10px; text-transform: uppercase;"">Scan for Quick Access</p>
+                      <img src=""{qrCodeResult}"" alt=""QR Code"" style=""width: 120px; height: 120px;"" width=""120"" height=""120"">
+                  </div>
+              </div>";
+
+          var htmlContent = _autoReplyTemplate
+              .Replace("{{LogoUrl}}", _logoUrl)
+              .Replace("{{FooterLogoUrl}}", _footerLogoUrl)
+              .Replace("{{RecipientName}}", recipientName)
+              .Replace("{{TicketNumber}}", ticketId)
+              .Replace("{{TicketStatus}}", ticketStatus)
+              .Replace("{{OriginalSubject}}", subject)
+              .Replace("{{TicketTitle}}", subject)
+              .Replace("{{TicketUrl}}", ticketUrl)
+              .Replace("{{QrCodeHtml}}", qrCodeHtml)
+              .Replace("{{Year}}", DateTime.UtcNow.Year.ToString())
+              .Replace("{{SupportEmail}}", _mailboxUser)
+              .Replace("{{SupportPhone}}", _supportPhone)
+              .Replace("{{EstimatedHours}}", estimatedHours)
+              .Replace("{{Severity}}", severity)
+              .Replace("{{SeverityClass}}", severityClass)
+              .Replace("{{ExpectedResponseTime}}", expectedResponseTime);
 
         var replyMessage = new Message
         {
@@ -349,42 +369,29 @@ public class MailPollingService : BackgroundService
     {
         try
         {
-            var notificationBody = $"""
-            <html>
-            <body style='font-family: Calibri, Arial, sans-serif; color: #333;'>
-                <p>A new support ticket has been assigned to you:</p>
+            var severityClass = severity.ToLower();
+            var ticketUrl = $"https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{ticketId}";
+            
+            // Generate QR Code base64 Data URI
+            var qrCodeResult = await Utilities.QrCodeGenerator.GenerateQrCodeBase64Async(ticketUrl);
+            var qrCodeHtml = string.IsNullOrEmpty(qrCodeResult) ? "" : $@"
+            <div class=""section"" style=""text-align: center; border-top: none; padding-top: 0;"">
+                <div style=""margin: 20px auto; padding: 20px; background: #fff; display: inline-block; border: 1px dashed #ccc; border-radius: 8px;"">
+                    <p style=""font-size: 12px; color: #888; margin-bottom: 10px; text-transform: uppercase;"">Scan for Quick Access</p>
+                    <img src=""{qrCodeResult}"" alt=""QR Code"" style=""width: 120px; height: 120px;"" width=""120"" height=""120"">
+                </div>
+            </div>";
 
-                <table style='border-collapse: collapse; margin: 20px 0;'>
-                    <tr>
-                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Ticket #:</td>
-                        <td style='padding: 8px;'>{ticketId}</td>
-                    </tr>
-                    <tr>
-                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Title:</td>
-                        <td style='padding: 8px;'>{ticketTitle}</td>
-                    </tr>
-                    <tr>
-                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Reporter:</td>
-                        <td style='padding: 8px;'>{senderName}</td>
-                    </tr>
-                    <tr>
-                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Severity:</td>
-                        <td style='padding: 8px;'>{severity}</td>
-                    </tr>
-                    <tr>
-                        <td style='padding: 8px; font-weight: bold; background-color: #f0f0f0;'>Est. Time:</td>
-                        <td style='padding: 8px;'>{estimatedHours} hours</td>
-                    </tr>
-                </table>
-
-                <p><a href='https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{ticketId}' style='color: #0078d4; text-decoration: none;'>
-                    <strong>View Ticket in Azure DevOps →</strong>
-                </a></p>
-
-                <p>Please review and start working on this issue.</p>
-            </body>
-            </html>
-            """;
+            var notificationBody = _assigneeNotificationTemplate
+                .Replace("{{LogoUrl}}", _logoUrl)                  .Replace("{{FooterLogoUrl}}", _footerLogoUrl)                .Replace("{{TicketNumber}}", ticketId)
+                .Replace("{{ReporterName}}", senderName)
+                .Replace("{{TicketTitle}}", ticketTitle)
+                .Replace("{{Severity}}", severity)
+                .Replace("{{SeverityClass}}", severityClass)
+                .Replace("{{EstimatedHours}}", estimatedHours.ToString())
+                .Replace("{{Year}}", DateTime.UtcNow.Year.ToString())
+                .Replace("{{TicketUrl}}", ticketUrl)
+                .Replace("{{QrCodeHtml}}", qrCodeHtml);
 
             var message = new Message
             {
@@ -420,10 +427,10 @@ public class MailPollingService : BackgroundService
         }
     }
 
-    private static string LoadEmailTemplate()
+    private static string LoadEmailTemplate(string templateName)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = "MailListenerWorker.Templates.AutoReplyTemplate.html";
+        var resourceName = $"MailListenerWorker.Templates.{templateName}";
 
         using var stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException($"Email template not found: {resourceName}");

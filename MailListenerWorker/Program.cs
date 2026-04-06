@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 Host.CreateDefaultBuilder(args)
     .ConfigureServices((hostContext, services) =>
     {
+        services.AddHttpClient();
         services.AddSingleton<AzureDevOpsService>();
         services.AddSingleton<GroqLlmService>();
         services.AddSingleton(sp =>

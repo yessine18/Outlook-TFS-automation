@@ -1,192 +1,235 @@
-<!DOCTYPE html>
-<html>
+﻿<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support Ticket Received</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: Calibri, 'Segoe UI', Arial, sans-serif;
-            background-color: #f5f5f5;
-            line-height: 1.5;
-        }
-        .wrapper { background-color: #f5f5f5; padding: 20px 0; }
-        .container { max-width: 800px; margin: 0 auto; background-color: #ffffff; }
-
-        /* Header */
-        .header {
-            background-color: #f5f5f5;
-            padding: 16px 24px;
-            border-bottom: 1px solid #d0d0d0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header-left { display: flex; align-items: center; gap: 8px; }
-        .header-logo img { height: 15px; }
-        .header-logo-text { font-size: 12px; color: #666; font-weight: 500; }
-        .header-right { font-size: 12px; color: #0078d4; font-weight: 500; }
-
-        /* Main Content */
-        .content { padding: 24px; background-color: #ffffff; }
-        .greeting-box {
-            background-color: #f9f9f9;
-            border-left: 3px solid #0078d4;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-        }
-        .greeting-text { color: #333; font-size: 13px; line-height: 1.6; }
-
-        /* Details Table */
-        .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .details-table tr { border-bottom: 1px solid #e0e0e0; }
-        .details-table tr:nth-child(even) { background-color: #f9f9f9; }
-        .details-table td { padding: 12px 16px; vertical-align: middle; font-size: 13px; }
-        .details-label {
-            font-weight: 600;
-            color: #1f1f1f;
-            width: 35%;
-            background-color: #ffffff;
-        }
-        .details-label-alt {
-            background-color: #f9f9f9;
-        }
-        .details-value { color: #333; }
-        .details-value-link { color: #0078d4; text-decoration: none; }
-        .details-value-link:hover { text-decoration: underline; }
-
-        /* Severity Badge */
-        .severity-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 3px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .severity-critical { background-color: #fee; color: #a80000; }
-        .severity-high { background-color: #fff4ce; color: #d83b01; }
-        .severity-medium { background-color: #fff0e0; color: #f7630c; }
-        .severity-low { background-color: #eff6f0; color: #107c10; }
-
-        /* Notable Info Box */
-        .info-box {
-            background-color: #f0f6ff;
-            border-left: 3px solid #0078d4;
-            padding: 12px 16px;
-            margin: 20px 0;
-            font-size: 12px;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
             line-height: 1.6;
         }
-        .info-box-title { font-weight: 600; margin-bottom: 4px; }
+        table { border-collapse: collapse; width: 100%; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        .wrapper {
+            width: 100%;
+            background-color: #f8fafc;
+            padding: 40px 0;
+            text-align: center;
+        }
+        .main-container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: left;
+            background-color: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        /* Header section with brand */
+        .header-content {
+            padding: 24px 32px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        /* Hero Section */
+        .hero { text-align: center; padding: 32px; background-color: #f8fafc; border-bottom: 1px solid #f1f5f9; }
+        .icon-circle {
+            width: 56px;
+            height: 56px;
+            background-color: #d1fae5;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .icon-circle svg { width: 28px; height: 28px; fill: #10b981; }
+        .hero-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        .hero-text {
+            font-size: 15px;
+            color: #64748b;
+        }
 
-        /* Sign Off */
-        .signoff { margin: 20px 0; color: #333; font-size: 13px; }
-        .signoff-name { font-weight: 600; color: #0078d4; }
+        /* Order Details Card -> Ticket Details */
+        .card {
+            background-color: #ffffff;
+            padding: 32px;
+        }
+        .card-header {
+            font-size: 16px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 24px;
+            color: #94a3b8;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 12px;
+            display: block;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 16px;
+        }
+
+        /* Status box */
+        .status-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 24px;
+            margin: 0 32px 32px;
+        }
 
         /* Footer */
         .footer {
-            background-color: #333333;
-            color: #ffffff;
-            padding: 20px 24px;
-            font-size: 11px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
+            background-color: #0f172a;
+            color: #94a3b8;
+            padding: 40px 32px;
+            text-align: center;
+            font-size: 13px;
         }
-        .footer-text { line-height: 1.6; }
-        .footer-text a { color: #0078d4; text-decoration: none; }
-        .footer-logo { font-weight: 600; font-size: 12px; margin-top: 12px; }
+        .footer-logo {
+            opacity: 0.7;
+        }
+        .footer p { margin-bottom: 12px; }
+        .footer a { color: #38bdf8; text-decoration: none; }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-critical { background: #fee2e2; color: #b91c1c; }
+        .badge-high { background: #fef08a; color: #a16207; }
+        .badge-medium { background: #e0f2fe; color: #1d4ed8; }
+        .badge-low { background: #dcfce7; color: #15803d; }
     </style>
 </head>
 <body>
-    <div class='wrapper'>
-        <div class='container'>
-            <!-- Header -->
-            <div class='header'>
-                <div class='header-left'>
-                    <div class='header-logo'><img src='{{LogoUrl}}' alt='Inetum'></div>
-                </div>
-                <div class='header-right'>Support</div>
-            </div>
-
-            <!-- Main Content -->
-            <div class='content'>
-                <!-- Greeting -->
-                <div class='greeting-box'>
-                    <div class='greeting-text'>
-                        Thank you. Your request was successfully submitted to Inetum Support.
-                    </div>
-                </div>
-
-                <!-- Ticket Details Table -->
-                <table class='details-table'>
+    <div class="wrapper">
+        <div class="main-container">
+            <div class="header-content">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
-                        <td class='details-label'>Incident title:</td>
-                        <td class='details-value'>{{OriginalSubject}}</td>
-                    </tr>
-                    <tr>
-                        <td class='details-label details-label-alt'>Support request number:</td>
-                        <td class='details-value' style='font-weight: bold; color: #0078d4;'>{{TicketNumber}}</td>
-                    </tr>
-                    <tr>
-                        <td class='details-label'>Severity rating:</td>
-                        <td class='details-value'>
-                            <span class='severity-badge severity-{{SeverityClass}}'>{{Severity}}</span>
+                        <td align="left" valign="middle">
+                            <img src="{{LogoUrl}}" alt="Logo" class="logo" style="height: 48px; max-height: 48px; width: auto; max-width: 200px; display: block;" height="48">
+                        </td>
+                        <td align="right" valign="middle" style="font-size: 16px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">
+                            Support
                         </td>
                     </tr>
-                    <tr>
-                        <td class='details-label details-label-alt'>Expected response within:</td>
-                        <td class='details-value details-label-alt'>{{ExpectedResponseTime}} hours</td>
-                    </tr>
-                    <tr>
-                        <td class='details-label'>Estimated resolution:</td>
-                        <td class='details-value'>~{{EstimatedHours}} hours</td>
-                    </tr>
-                    <tr>
-                        <td class='details-label details-label-alt'>Current status:</td>
-                        <td class='details-value details-label-alt'>{{TicketStatus}}</td>
-                    </tr>
-                    <tr>
-                        <td class='details-label'>Contact preference:</td>
-                        <td class='details-value'>Email</td>
-                    </tr>
-                    <tr>
-                        <td class='details-label details-label-alt'>Name:</td>
-                        <td class='details-value details-label-alt'>{{RecipientName}}</td>
-                    </tr>
-                    <tr>
-                        <td class='details-label'>Contact numbers:</td>
-                        <td class='details-value'>{{SupportPhone}}</td>
-                    </tr>
                 </table>
-
-                <!-- Info Box -->
-                <div class='info-box'>
-                    <div class='info-box-title'>📋 What happens next:</div>
-                    <div>
-                        Your request has been assigned to our support team. You will receive email updates as your request progresses. Please keep your support request number for reference.
-                    </div>
-                </div>
-
-                <!-- Sign Off -->
-                <p class='signoff'>
-                    Thank you,<br>
-                    <span class='signoff-name'>Inetum Support Team</span>
-                </p>
             </div>
 
+            <!-- Hero -->
+            <div class="hero">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                        <td align="center">
+                            <div class="icon-circle">
+                                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <div class="hero-title">We are on it!</div>
+                <div class="hero-text">Hello {{RecipientName}}, your request has been successfully captured. Our IT support team is reviewing the details.</div>
+            </div>
+
+            <!-- Card: Ticket Details -->
+            <div class="card">
+                <div class="card-header">Ticket DETAILS</div>
+                
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                        <td align="left" style="padding: 10px 0; font-size: 14px; color: #64748b;">Ticket Number</td>
+                        <td align="right" style="padding: 10px 0; font-size: 14px; color: #0f172a; font-weight: 600;">#{{TicketNumber}}</td>
+                    </tr>
+                    <tr>
+                        <td align="left" style="padding: 10px 0; font-size: 14px; color: #64748b;">Reported by</td>
+                        <td align="right" style="padding: 10px 0; font-size: 14px; color: #0f172a; font-weight: 600;">{{RecipientName}}</td>
+                    </tr>
+                    <tr>
+                        <td align="left" style="padding: 10px 0; font-size: 14px; color: #64748b;">Current Status</td>
+                        <td align="right" style="padding: 10px 0; font-size: 14px; color: #0f172a; font-weight: 600;">{{TicketStatus}}</td>
+                    </tr>
+                </table>
+                
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top: 1px dotted #e2e8f0; margin-top: 15px; padding-top: 15px;">
+                    <tr>
+                        <td width="40%" align="left" valign="top">
+                            <p style="font-size: 14px; color: #64748b; margin-top: 15px;">Target Priority</p>
+                        </td>
+                        <td width="60%" align="right" valign="top" style="padding-top: 15px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td align="left" style="padding: 6px 0; font-size: 13px; color: #64748b;">Severity</td>
+                                    <td align="right" style="padding: 6px 0;"><span class="badge badge-{{SeverityClass}}">{{Severity}}</span></td>
+                                </tr>
+                                <tr>
+                                    <td align="left" style="padding: 6px 0; font-size: 13px; color: #64748b;">Est. resolution</td>
+                                    <td align="right" style="padding: 6px 0; font-size: 13px; color: #0f172a; font-weight: 600;">~{{EstimatedHours}} hours</td>
+                                </tr>
+                                <tr>
+                                    <td align="left" style="padding: 6px 0; font-size: 13px; color: #64748b;">First response</td>
+                                    <td align="right" style="padding: 6px 0; font-size: 13px; color: #0f172a; font-weight: 600;">within {{ExpectedResponseTime}} hr</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Description box -->
+            <div style="padding: 0 32px 32px;">
+                <div class="section-title">Issue Summary</div>
+                <div style="font-weight: 600; font-size: 15px; color: #0f172a; margin-bottom: 8px;">{{TicketTitle}}</div>
+                <a href="{{TicketUrl}}" style="color: #3b82f6; text-decoration: none; font-weight: 600; font-size: 14px;">Track Request in Portal &rarr;</a>
+            </div>
+
+            <!-- Support Info Box -->
+            <div class="status-box">
+                <div class="section-title">Support Resources</div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                        <td width="50%" align="left" valign="top">
+                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;"><strong style="color: #0f172a; font-weight: 600;">Contact</strong></p>
+                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;">Email: <a href="mailto:{{SupportEmail}}" style="color: #3b82f6;">{{SupportEmail}}</a></p>
+                            <p style="margin: 0; font-size: 14px; color: #64748b;">Phone: {{SupportPhone}}</p>
+                        </td>
+                        <td width="50%" align="left" valign="top">
+                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;"><strong style="color: #0f172a; font-weight: 600;">Helpdesk Hours</strong></p>
+                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;">Monday - Friday</p>
+                            <p style="margin: 0; font-size: 14px; color: #64748b;">9:00 AM - 6:00 PM</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            
+            {{QrCodeHtml}}
+
             <!-- Footer -->
-            <div class='footer'>
-                <div>
-                    <div class='footer-text'>
-                        This message from Inetum is an important part of a program, service, or product that you or your company purchased or participates in. Please read our <a href='#'>Privacy Statement</a>.
-                    </div>
-                    <div style='margin-top: 12px;'>
-                        &copy; {{Year}} Inetum. All rights reserved.
-                    </div>
-                </div>
-                <div class='footer-logo'>Inetum</div>
+            <div class="footer">
+                <img src="{{FooterLogoUrl}}" alt="Logo" class="footer-logo" style="height: 28px; max-height: 28px; width: auto; margin-bottom: 24px; display: inline-block;" height="28">
+                <p>This is an automated confirmation. Please do not reply directly to this message.</p>
+                <p>&copy; {{Year}} IT Support Portal. Need help? Visit our <a href="#">Knowledge Base</a>.</p>
             </div>
         </div>
     </div>

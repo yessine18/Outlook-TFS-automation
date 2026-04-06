@@ -118,18 +118,30 @@ public class AzureDevOpsService
                 validateOnly: false,
                 cancellationToken: cancellationToken);
 
-            // Dynamically get the initial state and add the sent tag so we don't send a duplicate update immediately
-            if (createdWorkItem.Fields.TryGetValue("System.State", out var stateObj))
+            if (createdWorkItem == null)
             {
-                var initialState = stateObj.ToString().Replace(" ", "");
-                var updatedTags = $"Email; AutoCreated; EmailSent_{initialState}";
+                throw new InvalidOperationException("Failed to create work item: received null response from Azure DevOps");
+            }
 
-                var tagUpdateDoc = new JsonPatchDocument
+            // Dynamically get the initial state and add the sent tag so we don't send a duplicate update immediately
+            if (createdWorkItem.Fields != null)
+            {
+                if (createdWorkItem.Fields.TryGetValue("System.State", out var stateObj))
                 {
-                    new JsonPatchOperation { Operation = Operation.Add, Path = "/fields/System.Tags", Value = updatedTags }
-                };
+                    var initialState = stateObj?.ToString()?.Replace(" ", "") ?? "To Do";
+                    var updatedTags = $"Email; AutoCreated; EmailSent_{initialState}";
 
-                createdWorkItem = await _witClient.UpdateWorkItemAsync(tagUpdateDoc, createdWorkItem.Id ?? 0, cancellationToken: cancellationToken);
+                    var tagUpdateDoc = new JsonPatchDocument
+                    {
+                        new JsonPatchOperation { Operation = Operation.Add, Path = "/fields/System.Tags", Value = updatedTags }
+                    };
+
+                    var updatedItem = await _witClient.UpdateWorkItemAsync(tagUpdateDoc, createdWorkItem.Id ?? 0, cancellationToken: cancellationToken);
+                    if (updatedItem != null)
+                    {
+                        createdWorkItem = updatedItem;
+                    }
+                }
             }
 
             _logger.LogInformation(
