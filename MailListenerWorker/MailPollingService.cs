@@ -127,7 +127,7 @@ public class MailPollingService : BackgroundService
                 {
                     var state = stateObj?.ToString() ?? "Unknown";
                     var tags = tagsObj?.ToString() ?? "";
-                    System.IO.File.AppendAllText("sync_debug.log", $"[{DateTime.Now}] Check Item #{item.Id}: State='{state}', Tags='{tags}'\n");
+                    _logger.LogDebug("Checking ADO WorkItem #{Id}: State='{State}', Tags='{Tags}'", item.Id, state, tags);
 
                     // 1. ALWAYS SYNC WITH POSTGRESQL ───────────────────
                     try

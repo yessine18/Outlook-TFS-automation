@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Http;
 using System.Text;
 using System.Text.Json;
 using MailListenerWorker.Models;

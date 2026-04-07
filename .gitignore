@@ -12,6 +12,7 @@ secrets.json
 
 # IDE
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
@@ -45,8 +46,20 @@ packages/
 *.trx
 TestResult.xml
 
+# Logs
+*.log
+
 # External tools
 .qodo/
+
+# Python virtual env
+.venv/
+
+# Data files (may contain real employee emails)
+*.csv
+
+# Environment-specific settings
+appsettings.Development.json
 
 # OS generated
 .DS_Store
