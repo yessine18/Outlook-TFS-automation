@@ -26,5 +26,8 @@ public enum PipelineStatus
     AdoCreated,
 
     /// <summary>The Azure DevOps work item creation failed.</summary>
-    AdoFailed
+    AdoFailed,
+
+    /// <summary>The email notification (auto-reply or assignee) failed to send.</summary>
+    MailSendingFailed
 }

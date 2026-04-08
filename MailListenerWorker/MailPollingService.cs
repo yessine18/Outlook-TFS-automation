@@ -29,6 +29,7 @@ public class MailPollingService : BackgroundService
     private readonly string _supportPhone;
     private readonly string _autoReplyTemplate;
     private readonly string _assigneeNotificationTemplate;
+    private readonly string _tmaEmail = "ApplicationSupport@M365x62207154.onmicrosoft.com";
 
     public MailPollingService(
         ILogger<MailPollingService> logger,
@@ -71,16 +72,29 @@ public class MailPollingService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("MailPollingService started");
+        _logger.LogInformation("🚀 MailPollingService started and ready.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            await PollMailboxAsync(stoppingToken);
-            await PollWorkItemUpdatesAsync(stoppingToken);
+            try
+            {
+                _logger.LogInformation("🔄 Starting automation poll cycle at {Time}...", DateTime.Now.ToString("HH:mm:ss"));
+                
+                await PollMailboxAsync(stoppingToken);
+                await PollWorkItemUpdatesAsync(stoppingToken);
+                
+                _logger.LogInformation("✅ Automation cycle complete. Sleeping for 1 minute...");
+            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogError(ex, "⚠️ Critical error in poll loop. The service will attempt to recover in the next cycle.");
+                await SendTmaAlertAsync(_tmaEmail, "Main Service Loop", null, null, ex, stoppingToken);
+            }
+
             await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         }
 
-        _logger.LogInformation("MailPollingService stopping");
+        _logger.LogInformation("🛑 MailPollingService stopping.");
     }
 
     private async Task PollMailboxAsync(CancellationToken cancellationToken)
@@ -110,6 +124,7 @@ public class MailPollingService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while polling mailbox");
+            await SendTmaAlertAsync(_tmaEmail, "Mailbox Polling", null, null, ex, cancellationToken);
         }
     }
 
@@ -117,6 +132,7 @@ public class MailPollingService : BackgroundService
     {
         try
         {
+            _logger.LogInformation("🔍 Checking Azure DevOps for any state updates on tracked tickets...");
             var updatedItems = await _adoService.GetUpdatedWorkItemsAsync("AutoCreated", cancellationToken);
             foreach (var item in updatedItems)
             {
@@ -166,6 +182,7 @@ public class MailPollingService : BackgroundService
                     catch (Exception dbEx)
                     {
                         _logger.LogError(dbEx, "Failed to sync ADO update to database for WorkItem #{Id}", item.Id);
+                        await SendTmaAlertAsync(_tmaEmail, "Sync ADO to DB", $"WorkItem #{item.Id}", null, dbEx, cancellationToken);
                     }
 
                     // 2. ONLY SEND AUTO-REPLY ONCE PER STATE ───────────
@@ -201,10 +218,12 @@ public class MailPollingService : BackgroundService
                     }
                 }
             }
+            _logger.LogInformation("✅ Azure DevOps sync finished. Processed {Count} work items.", updatedItems.Count);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while polling work item updates");
+            await SendTmaAlertAsync(_tmaEmail, "Polling Work Item Updates", null, null, ex, cancellationToken);
         }
     }
 
@@ -246,20 +265,98 @@ public class MailPollingService : BackgroundService
         var initialState = "To Do";
         var assigneeEmail = _defaultAssignee;
         ExtractedEmailData? extractedData = null;
+        Guid ticketId = Guid.NewGuid();
 
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 1 — LLM Analysis
+        // ═══════════════════════════════════════════════════════════════
         try
         {
-            // Analyze email with Groq LLM to extract key information
+            var supportedFields = _jobFieldService.GetAllJobFields();
             extractedData = await _llmService.AnalyzeEmailAsync(
                 msg.Subject ?? "No Subject",
                 emailBody,
+                supportedFields,
                 cancellationToken);
 
-            // Resolve assignee based on extracted job field
             assigneeEmail = _jobFieldService.ResolveEmail(extractedData.JobField, _defaultAssignee);
-            var jobFieldMapping = _jobFieldService.GetMapping(extractedData.JobField);
 
-            // Create Azure DevOps work item with extracted data
+            _logger.LogInformation(
+                "LLM analysis complete — Severity: {Severity}, JobField: {JobField}, Assignee: {Assignee}",
+                extractedData.Severity,
+                extractedData.JobField,
+                assigneeEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ STEP 1 FAILED — LLM analysis error for email: {Subject}", msg.Subject);
+            await SendTmaAlertAsync(_tmaEmail, "LLM Analysis", msg.Subject, senderEmail, ex, cancellationToken);
+            await MarkAsReadAsync(msg.Id!, cancellationToken);
+            return;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 2 — Persist to PostgreSQL (DATABASE FIRST)
+        // ═══════════════════════════════════════════════════════════════
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var ticket = new Ticket
+            {
+                TicketId = ticketId,
+                MessageId = msg.Id ?? "Unknown",
+                SenderEmail = senderEmail ?? "Unknown",
+                Subject = msg.Subject ?? "No Subject",
+                BodyExcerpt = emailBody.Length > 4000 ? emailBody[..3997] + "..." : emailBody,
+                ReceivedAt = msg.ReceivedDateTime?.UtcDateTime ?? DateTime.UtcNow,
+                LastUpdatedAt = DateTime.UtcNow,
+                CurrentPipelineStatus = PipelineStatus.LlmSuccess,
+
+                // Extracted data
+                ExtractedDepartment = extractedData.JobField,
+                ExtractedIntent = extractedData.CoreProblem,
+                LlmConfidenceScore = extractedData.Confidence,
+
+                // ADO mapping — not yet created, will be back-filled in Step 4
+                AdoWorkItemId = null,
+                AdoAssignee = assigneeEmail,
+                AdoItemState = null,
+                AdoUrl = null
+            };
+
+            ticket.StateLog.Add(new TicketStateLog
+            {
+                LogId = Guid.NewGuid(),
+                TicketId = ticket.TicketId,
+                PipelineStatus = PipelineStatus.LlmSuccess,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            db.Tickets.Add(ticket);
+            await db.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("✅ Ticket {TicketId} persisted to PostgreSQL database (pre-ADO).", ticketId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ STEP 2 FAILED — Database persist error for email: {Subject}", msg.Subject);
+            await SendTmaAlertAsync(_tmaEmail, "Database Persist", msg.Subject, senderEmail, ex, cancellationToken);
+            await MarkAsReadAsync(msg.Id!, cancellationToken);
+            return;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 3 — Mark email as read (after successful DB persist)
+        // ═══════════════════════════════════════════════════════════════
+        await MarkAsReadAsync(msg.Id!, cancellationToken);
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 4 — Create Azure DevOps Work Item + Update DB
+        // ═══════════════════════════════════════════════════════════════
+        try
+        {
             var createdItem = await _adoService.CreateEmailWorkItemAsync(
                 msg.Subject ?? "No Subject",
                 emailBody,
@@ -285,7 +382,87 @@ public class MailPollingService : BackgroundService
                 extractedData.JobField,
                 assigneeEmail);
 
-            // Send email notification to assignee (if different from default)
+            // Back-fill the DB ticket with ADO data
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.TicketId == ticketId, cancellationToken);
+                if (ticket != null)
+                {
+                    ticket.AdoWorkItemId = workItemId > 0 ? workItemId : null;
+                    ticket.AdoItemState = initialState;
+                    ticket.AdoUrl = workItemId > 0 ? $"https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{workItemId}" : null;
+                    ticket.CurrentPipelineStatus = PipelineStatus.AdoCreated;
+                    ticket.LastUpdatedAt = DateTime.UtcNow;
+
+                    ticket.StateLog.Add(new TicketStateLog
+                    {
+                        LogId = Guid.NewGuid(),
+                        TicketId = ticket.TicketId,
+                        PipelineStatus = PipelineStatus.AdoCreated,
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    await db.SaveChangesAsync(cancellationToken);
+                    _logger.LogInformation("✅ Ticket {TicketId} updated with ADO WorkItem #{WorkItemId}.", ticketId, workItemId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ STEP 4 FAILED — ADO work item creation error for email: {Subject}", msg.Subject);
+
+            // Update DB ticket to reflect the ADO failure
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.TicketId == ticketId, cancellationToken);
+                if (ticket != null)
+                {
+                    ticket.CurrentPipelineStatus = PipelineStatus.AdoFailed;
+                    ticket.LastUpdatedAt = DateTime.UtcNow;
+                    ticket.StateLog.Add(new TicketStateLog
+                    {
+                        LogId = Guid.NewGuid(),
+                        TicketId = ticket.TicketId,
+                        PipelineStatus = PipelineStatus.AdoFailed,
+                        ErrorMessage = ex.Message,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+            }
+            catch (Exception dbEx)
+            {
+                _logger.LogError(dbEx, "Failed to update ticket status to AdoFailed in database.");
+            }
+
+            await SendTmaAlertAsync(_tmaEmail, "ADO Work Item Creation", msg.Subject, senderEmail, ex, cancellationToken);
+            return;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 5 — Send Emails (auto-reply + assignee notification)
+        //          On error: alert TMA but do NOT abort
+        // ═══════════════════════════════════════════════════════════════
+        try
+        {
+            // Auto-reply to original sender
+            if (!string.IsNullOrEmpty(senderEmail) && workItemId > 0)
+            {
+                await SendAutoReplyAsync(
+                    senderEmail,
+                    senderName ?? "Unknown",
+                    msg.Subject,
+                    workItemId.ToString(),
+                    initialState,
+                    extractedData,
+                    cancellationToken);
+                _logger.LogInformation("Auto-reply sent to: {Email}", senderEmail);
+            }
+
+            // Assignee notification (if different from default)
             if (!string.IsNullOrEmpty(assigneeEmail) && !assigneeEmail.Equals(_defaultAssignee, StringComparison.OrdinalIgnoreCase))
             {
                 await SendAssigneeNotificationAsync(
@@ -300,70 +477,39 @@ public class MailPollingService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create ADO work item for email: {Subject}", msg.Subject);
-        }
+            _logger.LogError(ex, "❌ STEP 5 FAILED — Mail sending error for email: {Subject}", msg.Subject);
 
-        if (!string.IsNullOrEmpty(senderEmail) && workItemId > 0)
-        {
-            await SendAutoReplyAsync(
-                senderEmail,
-                senderName ?? "Unknown",
-                msg.Subject,
-                workItemId.ToString(),
-                initialState,
-                extractedData,
-                cancellationToken);
-            _logger.LogInformation("Auto-reply sent to: {Email}", senderEmail);
-        }
-
-        await MarkAsReadAsync(msg.Id!, cancellationToken);
-
-        // ── PERSIST TO POSTGRESQL ───────────────────
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-            var ticket = new Ticket
+            // Update DB ticket to reflect mail sending failure
+            try
             {
-                TicketId = Guid.NewGuid(),
-                MessageId = msg.Id ?? "Unknown",
-                SenderEmail = senderEmail ?? "Unknown",
-                Subject = msg.Subject ?? "No Subject",
-                BodyExcerpt = emailBody.Length > 4000 ? emailBody[..3997] + "..." : emailBody,
-                ReceivedAt = msg.ReceivedDateTime?.UtcDateTime ?? DateTime.UtcNow,
-                LastUpdatedAt = DateTime.UtcNow,
-                CurrentPipelineStatus = PipelineStatus.AdoCreated,
-                
-                // Extracted data (if available)
-                ExtractedDepartment = extractedData?.JobField,
-                ExtractedIntent = extractedData?.CoreProblem,
-                LlmConfidenceScore = extractedData != null ? 0.95 : 0.0, // Mocked confidence for now
-                
-                // ADO mapping
-                AdoWorkItemId = workItemId > 0 ? workItemId : null,
-                AdoAssignee = assigneeEmail,
-                AdoItemState = initialState,
-                AdoUrl = workItemId > 0 ? $"https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{workItemId}" : null
-            };
-
-            ticket.StateLog.Add(new TicketStateLog
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.TicketId == ticketId, cancellationToken);
+                if (ticket != null)
+                {
+                    ticket.CurrentPipelineStatus = PipelineStatus.MailSendingFailed;
+                    ticket.LastUpdatedAt = DateTime.UtcNow;
+                    ticket.StateLog.Add(new TicketStateLog
+                    {
+                        LogId = Guid.NewGuid(),
+                        TicketId = ticket.TicketId,
+                        PipelineStatus = PipelineStatus.MailSendingFailed,
+                        ErrorMessage = ex.Message,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+            }
+            catch (Exception dbEx)
             {
-                LogId = Guid.NewGuid(),
-                TicketId = ticket.TicketId,
-                PipelineStatus = PipelineStatus.AdoCreated,
-                CreatedAt = DateTime.UtcNow
-            });
+                _logger.LogError(dbEx, "Failed to update ticket status to MailSendingFailed in database.");
+            }
 
-            db.Tickets.Add(ticket);
-            await db.SaveChangesAsync(cancellationToken);
+            // Alert TMA but do NOT abort — ticket and ADO item are already safe
+            await SendTmaAlertAsync(_tmaEmail, "Mail Sending (Auto-Reply / Assignee Notification)", msg.Subject, senderEmail, ex, cancellationToken);
+        }
 
-            _logger.LogInformation("✅ Ticket #{WorkItemId} persisted to PostgreSQL database successfully.", workItemId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Failed to persist ticket to PostgreSQL database.");
-        }
+        _logger.LogInformation("✅ Full pipeline complete for email: {Subject} (Ticket: {TicketId}, ADO: #{WorkItemId})", msg.Subject, ticketId, workItemId);
     }
 
     private async Task MarkAsReadAsync(string messageId, CancellationToken cancellationToken)
@@ -520,6 +666,91 @@ public class MailPollingService : BackgroundService
         {
             _logger.LogError(ex, "Failed to send assignee notification to {Email} for ticket {TicketId}", assigneeEmail, ticketId);
         }
+    }
+
+    private async Task SendTmaAlertAsync(
+        string tmaEmail,
+        string failedStep,
+        string? emailSubject,
+        string? senderEmail,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var htmlContent = $@"
+                <html>
+                <body style=""font-family: Arial, sans-serif; padding: 20px;"">
+                    <h2 style=""color: #d32f2f;"">⚠️ Pipeline Error Alert</h2>
+                    <p>An error occurred in the automated helpdesk pipeline. Immediate attention may be required.</p>
+                    <table style=""border-collapse: collapse; width: 100%; max-width: 600px;"">
+                        <tr style=""background: #fce4ec;"">
+                            <td style=""padding: 10px; border: 1px solid #ddd; font-weight: bold;"">Failed Step</td>
+                            <td style=""padding: 10px; border: 1px solid #ddd;"">{failedStep}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 10px; border: 1px solid #ddd; font-weight: bold;"">Email Subject</td>
+                            <td style=""padding: 10px; border: 1px solid #ddd;"">{emailSubject ?? "N/A"}</td>
+                        </tr>
+                        <tr style=""background: #f5f5f5;"">
+                            <td style=""padding: 10px; border: 1px solid #ddd; font-weight: bold;"">Sender</td>
+                            <td style=""padding: 10px; border: 1px solid #ddd;"">{senderEmail ?? "N/A"}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 10px; border: 1px solid #ddd; font-weight: bold;"">Error Type</td>
+                            <td style=""padding: 10px; border: 1px solid #ddd;"">{exception.GetType().Name}</td>
+                        </tr>
+                        <tr style=""background: #f5f5f5;"">
+                            <td style=""padding: 10px; border: 1px solid #ddd; font-weight: bold;"">Error Message</td>
+                            <td style=""padding: 10px; border: 1px solid #ddd;"">{System.Web.HttpUtility.HtmlEncode(exception.Message)}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 10px; border: 1px solid #ddd; font-weight: bold;"">Timestamp (UTC)</td>
+                            <td style=""padding: 10px; border: 1px solid #ddd;"">{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}</td>
+                        </tr>
+                    </table>
+                    <hr style=""margin-top: 20px;""/>
+                    <p style=""font-size: 12px; color: #888;"">This is an automated alert from the Helpdesk Automation Pipeline.</p>
+                </body>
+                </html>";
+
+            var message = new Message
+            {
+                Subject = $"🚨 Pipeline Error: {failedStep} — {emailSubject ?? "Unknown"}",
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = htmlContent
+                },
+                ToRecipients =
+                [
+                    new Recipient
+                    {
+                        EmailAddress = new EmailAddress { Address = tmaEmail }
+                    }
+                ]
+            };
+
+            await _graphClient
+                .Users[_mailboxUser]
+                .SendMail
+                .PostAsync(new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody
+                {
+                    Message = message,
+                    SaveToSentItems = true
+                }, cancellationToken: cancellationToken);
+
+            _logger.LogInformation("🚨 TMA alert sent to {TmaEmail} for failed step: {FailedStep}", tmaEmail, failedStep);
+        }
+        catch (Exception ex)
+        {
+            // If we can't even send the alert, log it — but don't throw
+            _logger.LogCritical(ex, "CRITICAL: Failed to send TMA alert email to {TmaEmail}. Original error step: {FailedStep}", tmaEmail, failedStep);
+        }
+
+        // Abort the process immediately as requested to prevent cascading errors
+        _logger.LogCritical("🛑 Halting process immediately due to pipeline error in step: {Step}", failedStep);
+        Environment.Exit(1);
     }
 
     private static string LoadEmailTemplate(string templateName)

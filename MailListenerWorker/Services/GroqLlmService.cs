@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MailListenerWorker.Models;
 
 namespace MailListenerWorker.Services;
@@ -20,30 +21,41 @@ public class GroqLlmService
         _httpClientFactory = httpClientFactory;
         _apiKey = configuration["Groq:ApiKey"] ?? throw new InvalidOperationException("Missing Groq:ApiKey configuration");
         _apiUrl = configuration["Groq:ApiUrl"] ?? "https://api.groq.com/openai/v1/chat/completions";
-        _model = configuration["Groq:Model"] ?? "mixtral-8x7b-32768";
+        _model = configuration["Groq:Model"] ?? "llama-3.3-70b-versatile";
     }
 
-    public async Task<ExtractedEmailData> AnalyzeEmailAsync(string emailSubject, string emailBody, CancellationToken cancellationToken)
+    public async Task<ExtractedEmailData> AnalyzeEmailAsync(string emailSubject, string emailBody, IEnumerable<string> supportedFields, CancellationToken cancellationToken)
     {
         try
         {
             _logger.LogInformation("Analyzing email with LLM: {Subject}", emailSubject);
 
-            // Limit email body to prevent token overflow
-            var truncatedBody = emailBody.Length > 2000 ? emailBody[..2000] : emailBody;
+            var fieldsList = string.Join(", ", supportedFields.Select(f => $"\"{f}\""));
+            // Limit email body to prevent token overflow (llama-3.3-70b has 128K context)
+            var truncatedBody = emailBody.Length > 6000 ? emailBody[..6000] : emailBody;
 
             var prompt = $$"""
 CRITICAL: You MUST respond with ONLY a single JSON object. No markdown. No code blocks. No explanation.
 
-Analyze this email and extract:
-- coreProblem: A concise title suitable for a support ticket (1-2 sentences, max 100 chars)
-- description: A 2-3 sentence summary of the issue (max 300 chars)
+Analyze this support email and extract ALL information. Do NOT summarize or generalize.
+Preserve every specific piece of data: server names, IP addresses, error codes, user counts,
+timestamps, version numbers, file paths, account names, and any other concrete details.
+
+Extract the following fields:
+- coreProblem: A concise but specific title for a support ticket (max 150 chars). Include key identifiers (server names, error codes) in the title.
+- description: A brief 2-3 sentence summary of the issue.
+- detailedDescription: A THOROUGH description that preserves ALL specific facts, numbers, names, dates, error messages, and technical details from the email. Do NOT omit any data. This should be comprehensive enough that someone reading it has ALL the information from the original email without needing to see it.
+- affectedSystems: List ALL specific systems, servers, applications, databases, services, or infrastructure mentioned (e.g., "DB-PROD-03, Oracle 19c, SAP ERP module FI"). Use "N/A" if none mentioned.
+- errorCodes: List ALL error codes, exception messages, HTTP status codes, or diagnostic identifiers found (e.g., "ORA-12541, HTTP 503, NullReferenceException"). Use "N/A" if none.
+- stepsToReproduce: If the sender describes steps, a sequence of events, or a timeline, capture them in order. Use "N/A" if not described.
+- impactScope: Who or what is affected — user count, department names, environment (production/staging/dev), geographic scope (e.g., "200 users in Tunis office, production environment"). Use "N/A" if not specified.
+- requestedAction: What the sender is explicitly asking for or expecting as resolution (e.g., "Restart server and restore backup"). Use "N/A" if no specific action requested.
 - estimatedHours: How many hours to resolve (integer 1-40)
 - severity: One of: Critical, High, Medium, Low
-- jobField: The responsible team/role (e.g., "Administrator", "Database – Oracle")
-- linksCount: Number of URLs (integer)
-- attachmentCount: Likely count (0 or 1)
-- confidence: Your confidence 0.0-1.0
+- jobField: MANDATORY: You must select the MOST RELEVANT job field ONLY from this exact comma-separated list: [{{fieldsList}}]. Do NOT invent new fields.
+- linksCount: Number of URLs found in the email (integer)
+- attachmentCount: Likely attachment count (0 or 1)
+- confidence: Your confidence in the extraction accuracy 0.0-1.0
 
 Email Subject: {{emailSubject}}
 
@@ -67,8 +79,8 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
                         content = prompt
                     }
                 },
-                temperature = 0.3,
-                max_tokens = 300
+                temperature = 0.2,
+                max_tokens = 1500
             };
 
             var content = new StringContent(
@@ -118,7 +130,8 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                NumberHandling = JsonNumberHandling.AllowReadingFromString
             };
             var extractedData = JsonSerializer.Deserialize<ExtractedEmailData>(cleanResponse, options);
 
@@ -129,11 +142,14 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
             }
 
             _logger.LogInformation(
-                "Email analyzed - Problem: {Problem}, Severity: {Severity}, JobField: {JobField}, EstimatedHours: {Hours}",
+                "Email analyzed - Problem: {Problem}, Severity: {Severity}, JobField: {JobField}, EstimatedHours: {Hours}, AffectedSystems: {Systems}, ErrorCodes: {Errors}, Impact: {Impact}",
                 extractedData.CoreProblem,
                 extractedData.Severity,
                 extractedData.JobField,
-                extractedData.EstimatedHours);
+                extractedData.EstimatedHours,
+                extractedData.AffectedSystems,
+                extractedData.ErrorCodes,
+                extractedData.ImpactScope);
 
             return extractedData;
         }
@@ -148,8 +164,14 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
     {
         return new ExtractedEmailData
         {
-            CoreProblem = emailSubject.Length > 100 ? emailSubject[..100] : emailSubject,
+            CoreProblem = emailSubject.Length > 150 ? emailSubject[..150] : emailSubject,
             Description = "Issue requires manual review",
+            DetailedDescription = "LLM extraction failed — original email should be reviewed manually.",
+            AffectedSystems = "N/A",
+            ErrorCodes = "N/A",
+            StepsToReproduce = "N/A",
+            ImpactScope = "N/A",
+            RequestedAction = "N/A",
             EstimatedHours = 4,
             Severity = "Medium",
             JobField = string.Empty,

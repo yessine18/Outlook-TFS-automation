@@ -50,21 +50,68 @@ public class AzureDevOpsService
                 ? extractedData.CoreProblem
                 : emailSubject;
 
-            // Use LLM-extracted description if available, otherwise use full email body preview
-            var descriptionText = !string.IsNullOrEmpty(extractedData?.Description)
-                ? $"{extractedData.Description}<br/><hr/>"
-                : string.Empty;
+            // Build a rich, structured description with ALL extracted details
+            var descBuilder = new System.Text.StringBuilder();
 
-            // Build description with metadata
-            var fullDescription = $"<b>From:</b> {senderName} ({senderEmail})<br/>" +
-                                 $"<b>Received:</b> {(receivedDateTime.HasValue ? receivedDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss") : "Unknown")}<br/>" +
-                                 (extractedData != null
-                                     ? $"<b>Estimated Time:</b> {extractedData.EstimatedHours} hours<br/>" +
-                                       $"<b>Severity:</b> {extractedData.Severity}<br/>" +
-                                       $"<b>Job Field:</b> {extractedData.JobField}<br/><hr/>"
-                                     : "") +
-                                 $"<b>Summary:</b><br/>{descriptionText}" +
-                                 BuildHiddenMetadata(senderEmail, senderName, extractedData, assigneeEmail);
+            // ── Header: Sender & Metadata ──
+            descBuilder.Append($"<b>From:</b> {senderName} ({senderEmail})<br/>");
+            descBuilder.Append($"<b>Received:</b> {(receivedDateTime.HasValue ? receivedDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss") : "Unknown")}<br/>");
+
+            if (extractedData != null)
+            {
+                descBuilder.Append($"<b>Severity:</b> {extractedData.Severity}<br/>");
+                descBuilder.Append($"<b>Estimated Time:</b> {extractedData.EstimatedHours} hours<br/>");
+                descBuilder.Append($"<b>Job Field:</b> {extractedData.JobField}<br/>");
+                descBuilder.Append($"<b>Confidence:</b> {extractedData.Confidence:P0}<br/>");
+                descBuilder.Append("<hr/>");
+
+                // ── Summary ──
+                if (!string.IsNullOrEmpty(extractedData.Description))
+                {
+                    descBuilder.Append($"<b>Summary:</b><br/>{extractedData.Description}<br/><br/>");
+                }
+
+                // ── Detailed Description (the key improvement) ──
+                if (!string.IsNullOrEmpty(extractedData.DetailedDescription) && extractedData.DetailedDescription != "N/A")
+                {
+                    descBuilder.Append($"<b>📋 Detailed Description:</b><br/>{extractedData.DetailedDescription}<br/><br/>");
+                }
+
+                // ── Affected Systems ──
+                if (!string.IsNullOrEmpty(extractedData.AffectedSystems) && extractedData.AffectedSystems != "N/A")
+                {
+                    descBuilder.Append($"<b>🖥️ Affected Systems:</b><br/>{extractedData.AffectedSystems}<br/><br/>");
+                }
+
+                // ── Error Codes ──
+                if (!string.IsNullOrEmpty(extractedData.ErrorCodes) && extractedData.ErrorCodes != "N/A")
+                {
+                    descBuilder.Append($"<b>⚠️ Error Codes:</b><br/>{extractedData.ErrorCodes}<br/><br/>");
+                }
+
+                // ── Impact Scope ──
+                if (!string.IsNullOrEmpty(extractedData.ImpactScope) && extractedData.ImpactScope != "N/A")
+                {
+                    descBuilder.Append($"<b>💥 Impact:</b><br/>{extractedData.ImpactScope}<br/><br/>");
+                }
+
+                // ── Steps to Reproduce ──
+                if (!string.IsNullOrEmpty(extractedData.StepsToReproduce) && extractedData.StepsToReproduce != "N/A")
+                {
+                    descBuilder.Append($"<b>🔄 Steps / Timeline:</b><br/>{extractedData.StepsToReproduce}<br/><br/>");
+                }
+
+                // ── Requested Action ──
+                if (!string.IsNullOrEmpty(extractedData.RequestedAction) && extractedData.RequestedAction != "N/A")
+                {
+                    descBuilder.Append($"<b>✅ Requested Action:</b><br/>{extractedData.RequestedAction}<br/><br/>");
+                }
+            }
+
+            // ── Hidden metadata for auto-reply system ──
+            descBuilder.Append(BuildHiddenMetadata(senderEmail, senderName, extractedData, assigneeEmail));
+
+            var fullDescription = descBuilder.ToString();
 
             var patchDocument = new JsonPatchDocument
             {
@@ -111,12 +158,35 @@ public class AzureDevOpsService
             }
 
             var workItemType = "Issue";
-            var createdWorkItem = await _witClient.CreateWorkItemAsync(
-                patchDocument,
-                _projectName,
-                workItemType,
-                validateOnly: false,
-                cancellationToken: cancellationToken);
+            WorkItem? createdWorkItem;
+            try
+            {
+                createdWorkItem = await _witClient.CreateWorkItemAsync(
+                    patchDocument,
+                    _projectName,
+                    workItemType,
+                    validateOnly: false,
+                    cancellationToken: cancellationToken);
+            }
+            catch (Microsoft.VisualStudio.Services.Common.VssServiceException ex) when (ex.Message.Contains("identity", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("The identity '{Assignee}' for field 'Assigned To' is unknown in Azure DevOps. Retrying creation without assignee.", assigneeEmail);
+                
+                // Remove the AssignedTo operation and retry
+                var retryPatch = new JsonPatchDocument();
+                foreach (var op in patchDocument)
+                {
+                    if (op.Path != "/fields/System.AssignedTo")
+                        retryPatch.Add(op);
+                }
+
+                createdWorkItem = await _witClient.CreateWorkItemAsync(
+                    retryPatch,
+                    _projectName,
+                    workItemType,
+                    validateOnly: false,
+                    cancellationToken: cancellationToken);
+            }
 
             if (createdWorkItem == null)
             {
