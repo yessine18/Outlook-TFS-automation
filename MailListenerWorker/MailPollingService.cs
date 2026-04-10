@@ -30,6 +30,7 @@ public class MailPollingService : BackgroundService
     private readonly string _autoReplyTemplate;
     private readonly string _assigneeNotificationTemplate;
     private readonly string _tmaEmail = "ApplicationSupport@M365x62207154.onmicrosoft.com";
+    private readonly List<string> _allowedDomains;
 
     public MailPollingService(
         ILogger<MailPollingService> logger,
@@ -55,6 +56,7 @@ public class MailPollingService : BackgroundService
         _logoUrl = configuration["Email:LogoUrl"] ?? "https://via.placeholder.com/150x40?text=Support";
         _footerLogoUrl = configuration["Email:FooterLogoUrl"] ?? _logoUrl;
         _supportPhone = configuration["Email:SupportPhone"] ?? "+216 56 646 677";
+        _allowedDomains = configuration.GetSection("Email:AllowedDomains").Get<List<string>>() ?? new List<string>();
 
         if (string.IsNullOrWhiteSpace(tenantId) ||
             string.IsNullOrWhiteSpace(clientId) ||
@@ -169,7 +171,6 @@ public class MailPollingService : BackgroundService
 
                             ticket.StateLog.Add(new TicketStateLog
                             {
-                                LogId = Guid.NewGuid(),
                                 TicketId = ticket.TicketId,
                                 PipelineStatus = ticket.CurrentPipelineStatus,
                                 ErrorMessage = $"ADO State updated to: {state}",
@@ -250,7 +251,16 @@ public class MailPollingService : BackgroundService
             msg.Subject,
             senderEmail,
             msg.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss"));
-
+        if (senderEmail != null && _allowedDomains.Any(domain => senderEmail.EndsWith(domain, StringComparison.OrdinalIgnoreCase)))
+        {
+            _logger.LogInformation("Email from allowed domain {SenderEmail}. Processing...", senderEmail);
+        }
+        else
+        {
+            _logger.LogWarning("Email from unauthorized domain {SenderEmail}. Skipping...", senderEmail);
+            await MarkAsReadAsync(msg.Id!, cancellationToken);
+            return;
+        }
         // Fetch the full message to get the Body details
         var fullMessage = await _graphClient
             .Users[_mailboxUser]
@@ -328,7 +338,6 @@ public class MailPollingService : BackgroundService
 
             ticket.StateLog.Add(new TicketStateLog
             {
-                LogId = Guid.NewGuid(),
                 TicketId = ticket.TicketId,
                 PipelineStatus = PipelineStatus.LlmSuccess,
                 CreatedAt = DateTime.UtcNow
@@ -397,7 +406,6 @@ public class MailPollingService : BackgroundService
 
                     ticket.StateLog.Add(new TicketStateLog
                     {
-                        LogId = Guid.NewGuid(),
                         TicketId = ticket.TicketId,
                         PipelineStatus = PipelineStatus.AdoCreated,
                         CreatedAt = DateTime.UtcNow
@@ -424,7 +432,6 @@ public class MailPollingService : BackgroundService
                     ticket.LastUpdatedAt = DateTime.UtcNow;
                     ticket.StateLog.Add(new TicketStateLog
                     {
-                        LogId = Guid.NewGuid(),
                         TicketId = ticket.TicketId,
                         PipelineStatus = PipelineStatus.AdoFailed,
                         ErrorMessage = ex.Message,
@@ -491,7 +498,6 @@ public class MailPollingService : BackgroundService
                     ticket.LastUpdatedAt = DateTime.UtcNow;
                     ticket.StateLog.Add(new TicketStateLog
                     {
-                        LogId = Guid.NewGuid(),
                         TicketId = ticket.TicketId,
                         PipelineStatus = PipelineStatus.MailSendingFailed,
                         ErrorMessage = ex.Message,
