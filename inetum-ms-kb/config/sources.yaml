@@ -1,0 +1,32 @@
+sources:
+  - name: ms_dynamics_power
+    type: sitemap
+    sitemap_index_urls:
+      - "https://learn.microsoft.com/_sitemaps/sitemapindex.xml"
+    include_patterns:
+      - "/en-us/dynamics365/"
+      - "/fr-fr/dynamics365/"
+      - "/en-us/power-platform/"
+      - "/fr-fr/power-platform/"
+    exclude_patterns:
+      - "/training/"
+      - "/certifications/"
+      - "/learn/"
+    max_urls: 5000
+
+  - name: ms_azure_entra
+    type: sitemap
+    sitemap_index_urls:
+      - "https://learn.microsoft.com/_sitemaps/sitemapindex.xml"
+    include_patterns:
+      - "/en-us/azure/devops/"
+      - "/fr-fr/azure/devops/"
+      - "/en-us/entra/"
+      - "/fr-fr/entra/"
+    exclude_patterns:
+      - "/training/"
+      - "/certifications/"
+      - "/learn/"
+    max_urls: 5000
+
+# Why filter? Training pages and course content add noise. You want product documentation and troubleshooting.
