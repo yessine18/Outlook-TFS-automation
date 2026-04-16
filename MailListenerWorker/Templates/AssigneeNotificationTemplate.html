@@ -1,225 +1,228 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Ticket Assigned</title>
+    <title>New Assignment: {{TicketTitle}}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", Helvetica, Arial, sans-serif;
-            background-color: #f4f5f7;
-            color: #333333;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
             line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
         table { border-collapse: collapse; width: 100%; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
         .wrapper {
             width: 100%;
-            background-color: #f4f5f7;
-            padding: 40px 0;
+            background-color: #f3f4f6;
+            padding: 48px 0;
             text-align: center;
         }
         .main-container {
-            max-width: 600px;
+            max-width: 640px;
             margin: 0 auto;
             text-align: left;
+            background-color: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
         }
-        /* Top Navigation / Logo */
-        .top-nav {
-            padding: 0 20px 40px 20px;
+        /* Header section with brand */
+        .header-content {
+            padding: 32px 40px;
+            border-bottom: 1px solid #f3f4f6;
         }
         
         /* Hero Section */
-        .hero { text-align: center; margin-bottom: 30px; padding: 0 20px; }
-        .icon-circle {
-            width: 48px;
-            height: 48px;
-            background-color: #e6f7ff;
-            border: 2px solid #1890ff;
-            border-radius: 50%;
-            display: inline-block;
-            line-height: 48px;
-            text-align: center;
-            margin-bottom: 16px;
+        .hero { 
+            padding: 40px 40px 10px 40px; 
+            background-color: #ffffff;
         }
-        .icon-circle svg { width: 24px; height: 24px; fill: #1890ff; vertical-align: middle; }
         .hero-title {
             font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #111111;
-        }
-        .hero-subtitle {
-            font-size: 20px;
-            color: #222222;
+            font-weight: 700;
+            color: #111827;
             margin-bottom: 12px;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
         }
         .hero-text {
-            font-size: 14px;
-            color: #888888;
+            font-size: 16px;
+            color: #4b5563;
         }
 
         /* Order Details Card -> Ticket Details */
         .card {
             background-color: #ffffff;
-            border-radius: 2px;
-            padding: 30px;
-            margin: 0 20px 30px 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            padding: 10px 40px 32px 40px;
         }
-        .card-header {
-            font-size: 18px;
+        .grid-table {
+            background-color: #f9fafb;
+            border-radius: 12px;
+            border: 1px solid #f3f4f6;
+            padding: 24px;
+        }
+        
+        .grid-col {
+            padding: 12px;
+        }
+        .grid-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        .grid-value {
+            font-size: 14px;
+            color: #111827;
             font-weight: 500;
-            margin-bottom: 20px;
-            color: #222222;
+        }
+        .mono-value {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            background-color: #e5e7eb;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
         }
 
-        /* Section Below Card */
-        .section {
-            padding: 30px 20px 10px 20px;
-            margin: 0 20px;
-            border-top: 1px dotted #cccccc;
+        /* Support Info Box */
+        .status-box {
+            background-color: #ffffff;
+            border-top: 1px solid #f3f4f6;
+            padding: 32px 40px;
         }
-        .section-title {
-            font-size: 18px;
-            font-weight: 500;
-            margin-bottom: 20px;
-            color: #222222;
-        }
-        .product-info p {
-            color: #888;
-            font-size: 12px;
-            margin-top: 4px;
-        }
-        .product-info a {
-            color: #1890ff;
-            text-decoration: none;
+        .action-button {
             display: inline-block;
-            margin-top: 8px;
-            font-weight: 500;
+            background-color: #2563eb;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 20px;
+            letter-spacing: 0.02em;
         }
 
         /* Footer */
         .footer {
-            background-color: #222222;
-            color: #888888;
-            padding: 40px 20px;
+            background-color: #1e1e1e;
+            color: #9ca3af;
+            padding: 48px 40px;
             text-align: center;
-            font-size: 12px;
-            margin-top: 40px;
+            font-size: 13px;
+            border-bottom-left-radius: 16px;
+            border-bottom-right-radius: 16px;
         }
-        .footer-text {
-            margin-bottom: 20px;
-            max-width: 400px;
-            margin-left: auto;
-            margin-right: auto;
+        .footer-logo {
+            opacity: 0.5;
+            filter: grayscale(100%);
         }
-        .footer-links {
-            margin-bottom: 20px;
-        }
-        .footer-links a {
-            color: #cccccc;
-            text-decoration: none;
-            margin: 0 10px;
-        }
+        .footer p { margin-bottom: 12px; }
+        .footer a { color: #d1d5db; text-decoration: none; font-weight: 500; }
         
+        /* Badges */
         .badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
             padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
+            border-radius: 20px;
+            font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
-        .badge-critical { background: #fee2e2; color: #c62828; }
-        .badge-high { background: #fef08a; color: #b45309; }
-        .badge-medium { background: #e0f2fe; color: #1e40af; }
+        .badge-critical { background: #fee2e2; color: #991b1b; }
+        .badge-high { background: #ffedd5; color: #9a3412; }
+        .badge-medium { background: #e0f2fe; color: #075985; }
         .badge-low { background: #dcfce7; color: #166534; }
     </style>
 </head>
 <body>
     <div class="wrapper">
         <div class="main-container">
-            <div class="top-nav">
+            <!-- Header -->
+            <div class="header-content">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
                         <td align="left" valign="middle">
-                            <img src="{{LogoUrl}}" alt="Logo" class="logo" style="height: 48px; max-height: 48px; width: auto; max-width: 200px; display: block;" height="48">
+                            <img src="{{LogoUrl}}" alt="Logo" class="logo" style="height: 36px; width: auto; max-width: 150px; display: block;" height="36">
                         </td>
-                        <td align="right" valign="middle" style="font-size: 16px; font-weight: 600; color: #888888; text-transform: uppercase; letter-spacing: 1px;">
-                            Support
+                        <td align="right" valign="middle" style="font-size: 13px; font-weight: 600; color: #2563eb; text-transform: uppercase; letter-spacing: 1.5px;">
+                            Agent Assignment
                         </td>
                     </tr>
                 </table>
             </div>
 
-            <!-- Hero -->
+            <!-- Hero using Dynamic Subject -->
             <div class="hero">
-                <div class="icon-circle">
-                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                </div>
-                <div class="hero-title">New Assignment</div>
-                <div class="hero-subtitle">Ticket #{{TicketNumber}} has been assigned to you</div>
-                <div class="hero-text">Please review and update the ticket status when possible.</div>
+                <div class="hero-title">{{TicketTitle}}</div>
+                <div class="hero-text">A new incident has been automatically routed to your queue by the Groq AI Engine. Please review and process within the SLA window.</div>
             </div>
 
-            <!-- Card: Ticket Details -->
+            <!-- Ticket Details Matrix -->
             <div class="card">
-                <div class="card-header">Assignment details</div>
+                <div class="grid-table">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                        <tr>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">Incident ID</div>
+                                <div class="grid-value mono-value">#{{TicketNumber}}</div>
+                            </td>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">Reporting User</div>
+                                <div class="grid-value">{{ReporterName}}</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">Impact Severity</div>
+                                <div class="grid-value">
+                                    <span class="badge badge-{{SeverityClass}}">{{Severity}}</span>
+                                </div>
+                            </td>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">SLA Target</div>
+                                <div class="grid-value">~{{EstimatedHours}} Hours</div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
                 
-                <!-- Table Layout for Outlook -->
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
-                        <td align="left" style="padding: 10px 0; font-size: 13px; color: #666666;">Ticket number:</td>
-                        <td align="right" style="padding: 10px 0; font-size: 13px; color: #222222; font-weight: 500;">#{{TicketNumber}}</td>
-                    </tr>
-                    <tr>
-                        <td align="left" style="padding: 10px 0; font-size: 13px; color: #666666;">Reporter name:</td>
-                        <td align="right" style="padding: 10px 0; font-size: 13px; color: #222222; font-weight: 500;">{{ReporterName}}</td>
-                    </tr>
-                </table>
-                
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top: 1px dotted #ccc; margin-top: 10px;">
-                    <tr>
-                        <td width="40%"></td>
-                        <td width="60%" style="padding-top: 15px;">
-                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                                <tr>
-                                    <td align="left" style="padding: 5px 0; font-size: 13px; color: #666666;">Severity</td>
-                                    <td align="right" style="padding: 5px 0; font-size: 13px;"><span class="badge badge-{{SeverityClass}}">{{Severity}}</span></td>
-                                </tr>
-                                <tr>
-                                    <td align="left" style="padding: 5px 0; font-size: 13px; color: #666666;">Estimated resolution</td>
-                                    <td align="right" style="padding: 5px 0; font-size: 13px; color: #222222; font-weight: 500;">~{{EstimatedHours}} hours</td>
-                                </tr>
-                            </table>
+                        <td align="left">
+                            <a href="{{TicketUrl}}" class="action-button">Open Internal Board &rarr;</a>
                         </td>
                     </tr>
                 </table>
             </div>
 
-            <!-- Below Card -->
-            <div class="section">
-                <div class="section-title">Issue Summary</div>
-                <div style="font-weight: 500; font-size: 14px; color: #222; margin-bottom: 8px;">{{TicketTitle}}</div>
-                <a href="{{TicketUrl}}" style="color: #1890ff; text-decoration: none; font-weight: 500; font-size: 13px;">Open Ticket in Azure DevOps &rarr;</a>
+            <div class="status-box">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                        <td width="60%" align="left" valign="top">
+                            <div class="grid-label">Quick Actions</div>
+                            <p style="font-size: 13px; color: #4b5563; margin-top: 4px;">To view complete context or debug output, please access the Azure DevOps console directly.</p>
+                        </td>
+                        <td width="40%" align="right" valign="top">
+                            {{QrCodeHtml}}
+                        </td>
+                    </tr>
+                </table>
             </div>
-            
-            {{QrCodeHtml}}
 
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            <img src="{{FooterLogoUrl}}" alt="Logo" class="footer-logo" style="height: 24px; max-height: 24px; width: auto; opacity: 0.5; display: inline-block; margin-bottom: 20px;" height="24">
-            <div class="footer-text">
-                An automated assignment notification from your IT Support Desk. Please review your active SLA and respond accordingly.
-            </div>
-            <div class="footer-links">
-                <a href="#">Support Teams</a> | <a href="#">Knowledge Base</a> | <a href="#">Service Policies</a>
-            </div>
-            <div class="copyright">
-                &copy; {{Year}} IT Support. All rights reserved.
+            <!-- Footer -->
+            <div class="footer">
+                <img src="{{FooterLogoUrl}}" alt="Logo" class="footer-logo" style="height: 24px; margin-bottom: 24px; display: inline-block;" height="24">
+                <p>Internal employee assignment notification. Please handle sensitive user data accordingly.</p>
+                <p>&copy; {{Year}} IT Support Services. Internal Use Only.</p>
             </div>
         </div>
     </div>

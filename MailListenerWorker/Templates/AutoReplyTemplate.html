@@ -3,236 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Support Ticket Received</title>
+    <title>{{TicketTitle}}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", Helvetica, Arial, sans-serif;
-            background-color: #f8fafc;
-            color: #334155;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
             line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
         table { border-collapse: collapse; width: 100%; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
         .wrapper {
             width: 100%;
-            background-color: #f8fafc;
-            padding: 40px 0;
+            background-color: #f3f4f6;
+            padding: 48px 0;
             text-align: center;
         }
         .main-container {
-            max-width: 600px;
+            max-width: 640px;
             margin: 0 auto;
             text-align: left;
             background-color: #ffffff;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            border: 1px solid #e5e7eb;
             overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
         }
         /* Header section with brand */
         .header-content {
-            padding: 24px 32px;
-            border-bottom: 1px solid #f1f5f9;
+            padding: 32px 40px;
+            border-bottom: 1px solid #f3f4f6;
         }
         
         /* Hero Section */
-        .hero { text-align: center; padding: 32px; background-color: #f8fafc; border-bottom: 1px solid #f1f5f9; }
-        .icon-circle {
-            width: 56px;
-            height: 56px;
-            background-color: #d1fae5;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
-            margin-left: auto;
-            margin-right: auto;
+        .hero { 
+            padding: 40px 40px 10px 40px; 
+            background-color: #ffffff;
         }
-        .icon-circle svg { width: 28px; height: 28px; fill: #10b981; }
         .hero-title {
             font-size: 24px;
             font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 8px;
+            color: #111827;
+            margin-bottom: 12px;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
         }
         .hero-text {
-            font-size: 15px;
-            color: #64748b;
+            font-size: 16px;
+            color: #4b5563;
+        }
+        .username {
+            font-weight: 600;
+            color: #111827;
         }
 
         /* Order Details Card -> Ticket Details */
         .card {
             background-color: #ffffff;
-            padding: 32px;
+            padding: 10px 40px 32px 40px;
         }
-        .card-header {
-            font-size: 16px;
+        .grid-table {
+            background-color: #f9fafb;
+            border-radius: 12px;
+            border: 1px solid #f3f4f6;
+            padding: 24px;
+        }
+        
+        .grid-col {
+            padding: 12px;
+        }
+        .grid-label {
+            font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-bottom: 24px;
-            color: #94a3b8;
-            border-bottom: 2px solid #f1f5f9;
-            padding-bottom: 12px;
-            display: block;
+            color: #6b7280;
+            margin-bottom: 4px;
         }
-        
-        .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 16px;
+        .grid-value {
+            font-size: 14px;
+            color: #111827;
+            font-weight: 500;
+        }
+        .mono-value {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            background-color: #e5e7eb;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
         }
 
-        /* Status box */
+        /* Support Info Box */
         .status-box {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 24px;
-            margin: 0 32px 32px;
+            background-color: #ffffff;
+            border-top: 1px solid #f3f4f6;
+            padding: 32px 40px;
+        }
+        .action-button {
+            display: inline-block;
+            background-color: #111827;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 20px;
+            letter-spacing: 0.02em;
         }
 
         /* Footer */
         .footer {
-            background-color: #0f172a;
-            color: #94a3b8;
-            padding: 40px 32px;
+            background-color: #1f2937;
+            color: #9ca3af;
+            padding: 48px 40px;
             text-align: center;
             font-size: 13px;
+            border-bottom-left-radius: 16px;
+            border-bottom-right-radius: 16px;
         }
         .footer-logo {
-            opacity: 0.7;
+            opacity: 0.5;
+            filter: grayscale(100%);
         }
         .footer p { margin-bottom: 12px; }
-        .footer a { color: #38bdf8; text-decoration: none; }
+        .footer a { color: #d1d5db; text-decoration: none; font-weight: 500; }
         
+        /* Badges */
         .badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
             padding: 4px 10px;
-            border-radius: 12px;
+            border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
-        .badge-critical { background: #fee2e2; color: #b91c1c; }
-        .badge-high { background: #fef08a; color: #a16207; }
-        .badge-medium { background: #e0f2fe; color: #1d4ed8; }
-        .badge-low { background: #dcfce7; color: #15803d; }
+        .badge-critical { background: #fee2e2; color: #991b1b; }
+        .badge-high { background: #ffedd5; color: #9a3412; }
+        .badge-medium { background: #e0f2fe; color: #075985; }
+        .badge-low { background: #dcfce7; color: #166534; }
     </style>
 </head>
 <body>
     <div class="wrapper">
         <div class="main-container">
+            <!-- Header -->
             <div class="header-content">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
                         <td align="left" valign="middle">
-                            <img src="{{LogoUrl}}" alt="Logo" class="logo" style="height: 48px; max-height: 48px; width: auto; max-width: 200px; display: block;" height="48">
+                            <img src="{{LogoUrl}}" alt="Logo" class="logo" style="height: 36px; width: auto; max-width: 150px; display: block;" height="36">
                         </td>
-                        <td align="right" valign="middle" style="font-size: 16px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">
-                            Support
+                        <td align="right" valign="middle" style="font-size: 13px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 1.5px;">
+                            Helpdesk Service
                         </td>
                     </tr>
                 </table>
             </div>
 
-            <!-- Hero -->
+            <!-- Hero using Dynamic Subject -->
             <div class="hero">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                    <tr>
-                        <td align="center">
-                            <div class="icon-circle">
-                                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                            </div>
-                        </td>
-                    </tr>
-                </table>
-                <div class="hero-title">We are on it!</div>
-                <div class="hero-text">Hello {{RecipientName}}, your request has been successfully captured. Our IT support team is reviewing the details.</div>
+                <div class="hero-title">{{TicketTitle}}</div>
+                <div class="hero-text">Hi <span class="username">{{RecipientName}}</span>, your request point has been secured. Our technical team is actively reviewing your issue parameters.</div>
             </div>
 
             <!-- Optional AI Solution injected if auto-resolved -->
             {{AiSolutionHtml}}
 
-            <!-- Card: Ticket Details -->
+            <!-- Ticket Details Matrix -->
             <div class="card">
-                <div class="card-header">Ticket DETAILS</div>
+                <div class="grid-table">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                        <tr>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">Incident ID</div>
+                                <div class="grid-value mono-value">#{{TicketNumber}}</div>
+                            </td>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">Current Pipeline Status</div>
+                                <div class="grid-value">{{TicketStatus}}</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">Impact Severity</div>
+                                <div class="grid-value">
+                                    <span class="badge badge-{{SeverityClass}}">{{Severity}}</span>
+                                </div>
+                            </td>
+                            <td class="grid-col" width="50%" valign="top">
+                                <div class="grid-label">SLA Est. Resolution</div>
+                                <div class="grid-value">{{EstimatedHours}} Hours</div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
                 
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
-                        <td align="left" style="padding: 10px 0; font-size: 14px; color: #64748b;">Ticket Number</td>
-                        <td align="right" style="padding: 10px 0; font-size: 14px; color: #0f172a; font-weight: 600;">#{{TicketNumber}}</td>
-                    </tr>
-                    <tr>
-                        <td align="left" style="padding: 10px 0; font-size: 14px; color: #64748b;">Reported by</td>
-                        <td align="right" style="padding: 10px 0; font-size: 14px; color: #0f172a; font-weight: 600;">{{RecipientName}}</td>
-                    </tr>
-                    <tr>
-                        <td align="left" style="padding: 10px 0; font-size: 14px; color: #64748b;">Current Status</td>
-                        <td align="right" style="padding: 10px 0; font-size: 14px; color: #0f172a; font-weight: 600;">{{TicketStatus}}</td>
-                    </tr>
-                </table>
-                
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top: 1px dotted #e2e8f0; margin-top: 15px; padding-top: 15px;">
-                    <tr>
-                        <td width="40%" align="left" valign="top">
-                            <p style="font-size: 14px; color: #64748b; margin-top: 15px;">Target Priority</p>
-                        </td>
-                        <td width="60%" align="right" valign="top" style="padding-top: 15px;">
-                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                                <tr>
-                                    <td align="left" style="padding: 6px 0; font-size: 13px; color: #64748b;">Severity</td>
-                                    <td align="right" style="padding: 6px 0;"><span class="badge badge-{{SeverityClass}}">{{Severity}}</span></td>
-                                </tr>
-                                <tr>
-                                    <td align="left" style="padding: 6px 0; font-size: 13px; color: #64748b;">Est. resolution</td>
-                                    <td align="right" style="padding: 6px 0; font-size: 13px; color: #0f172a; font-weight: 600;">~{{EstimatedHours}} hours</td>
-                                </tr>
-                                <tr>
-                                    <td align="left" style="padding: 6px 0; font-size: 13px; color: #64748b;">First response</td>
-                                    <td align="right" style="padding: 6px 0; font-size: 13px; color: #0f172a; font-weight: 600;">within {{ExpectedResponseTime}} hr</td>
-                                </tr>
-                            </table>
+                        <td align="left">
+                            <a href="{{TicketUrl}}" class="action-button">Track Resolution Progress &rarr;</a>
                         </td>
                     </tr>
                 </table>
             </div>
 
-            <!-- Description box -->
-            <div style="padding: 0 32px 32px;">
-                <div class="section-title">Issue Summary</div>
-                <div style="font-weight: 600; font-size: 15px; color: #0f172a; margin-bottom: 8px;">{{TicketTitle}}</div>
-                <a href="{{TicketUrl}}" style="color: #3b82f6; text-decoration: none; font-weight: 600; font-size: 14px;">Track Request in Portal &rarr;</a>
-            </div>
-
-            <!-- Support Info Box -->
             <div class="status-box">
-                <div class="section-title">Support Resources</div>
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
-                        <td width="50%" align="left" valign="top">
-                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;"><strong style="color: #0f172a; font-weight: 600;">Contact</strong></p>
-                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;">Email: <a href="mailto:{{SupportEmail}}" style="color: #3b82f6;">{{SupportEmail}}</a></p>
-                            <p style="margin: 0; font-size: 14px; color: #64748b;">Phone: {{SupportPhone}}</p>
+                        <td width="60%" align="left" valign="top">
+                            <div class="grid-label">Technical Support</div>
+                            <p style="font-size: 14px; color: #4b5563; margin-top: 4px;">{{SupportEmail}}</p>
+                            <p style="font-size: 14px; color: #4b5563;">{{SupportPhone}}</p>
                         </td>
-                        <td width="50%" align="left" valign="top">
-                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;"><strong style="color: #0f172a; font-weight: 600;">Helpdesk Hours</strong></p>
-                            <p style="margin: 0 0 6px; font-size: 14px; color: #64748b;">Monday - Friday</p>
-                            <p style="margin: 0; font-size: 14px; color: #64748b;">9:00 AM - 6:00 PM</p>
+                        <td width="40%" align="right" valign="top">
+                            {{QrCodeHtml}}
                         </td>
                     </tr>
                 </table>
             </div>
-            
-            {{QrCodeHtml}}
 
             <!-- Footer -->
             <div class="footer">
-                <img src="{{FooterLogoUrl}}" alt="Logo" class="footer-logo" style="height: 28px; max-height: 28px; width: auto; margin-bottom: 24px; display: inline-block;" height="28">
-                <p>This is an automated confirmation. Please do not reply directly to this message.</p>
-                <p>&copy; {{Year}} IT Support Portal. Need help? Visit our <a href="#">Knowledge Base</a>.</p>
+                <img src="{{FooterLogoUrl}}" alt="Logo" class="footer-logo" style="height: 24px; margin-bottom: 24px; display: inline-block;" height="24">
+                <p>System-generated service confirmation. Do not reply to this notification.</p>
+                <p>&copy; {{Year}} IT Support Infrastructure. Visit the <a href="#">Knowledge Base</a>.</p>
             </div>
         </div>
     </div>
