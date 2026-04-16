@@ -20,24 +20,33 @@ A **.NET Worker Service** that transforms incoming support emails into fully tra
 flowchart LR
     A["📨 Outlook Inbox"] -->|MS Graph API| B["🔄 Mail Polling Service"]
     B -->|Email Body| C["🤖 Groq LLM Extraction"]
-    C -->|Detailed Problem| D["🐍 Python Vectorizer (Local)"]
-    D -->|384D Math Array| E["🗄️ PostgreSQL (pgvector)"]
-    E -->|Top 3 Docs| F["🧠 Groq LLM AI Verdict"]
     
-    F -->|Verdict: No Solution| G["📋 Azure DevOps Issue"]
-    F -->|Verdict: Has Solution| H["🟢 Fast Auto-Reply + Trigger Done state"]
+    subgraph AI Auto-Resolve Pipeline
+        C -->|Detailed Problem| D["🐍 Python Vectorizer (Local)"]
+        D -->|384D Math Array| E["🗄️ PostgreSQL (pgvector)"]
+        E -->|Top 3 Docs| F["🧠 Groq LLM AI Verdict"]
+    end
     
+    %% RAG Outcomes
+    F -->|Verdict: Has Solution| H["🟢 Fast Auto-Reply (with Solution)"]
+    F -->|Verdict: No Solution| G["📋 Azure DevOps Work Item"]
+
+    %% Human Routing & Infrastructure
     G -->|State Sync| E
     B -->|Persist Metadata| E
+    
+    G -->|Assign| I["👤 Assignee Notification"]
+    G -->|Standard Confirmation| H
+    E -->|REST API| J["📊 Live Dashboard"]
 ```
 
-1. **Poll** — The worker service monitors a shared Outlook mailbox every 60 seconds via Microsoft Graph.
-2. **Analyze** — Each new email is sent to **Groq LLM** (LLaMA 3.3 70B) which extracts: core problem, severity, estimated resolution time, and the responsible job field.
-3. **RAG Vector Search** — A local Python script (using HuggingFace's `all-MiniLM-L6-v2`) converts the problem into a mathematical 384D vector array. C# queries PostgreSQL (`pgvector`) to find the **top 3 matching Microsoft Documentation chunks** from an offline dataset of 14,000+ scraped files.
-4. **Auto-Resolve Evaluation** — Llama-3 evaluates the problem natively against these 3 official Microsoft Docs. If it finds an explicit, step-by-step solution, it dynamically generates an Instant Fix email.
-5. **Route & Create** — An Azure DevOps **Issue** work item is created. If the RAG AI resolved it, the step-by-step solution is heavily appended to the Azure DevOps ticket description tracking logs!
-6. **Notify** — A professional HTML auto-reply (with QR code) is sent. If auto-resolved, this email contains a massive green highlighted box with the exact solution and Microsoft URLs.
-7. **Track & Sync** — Every ticket and state transition is persisted to PostgreSQL. A live web dashboard shows real-time pipeline stats and tracks Azure DevOps board state changes natively to send automatic user updates!
+1. **Poll** — The worker service natively monitors a shared support Outlook mailbox every 60 seconds via the Microsoft Graph API.
+2. **Analyze** — Each new email is sent to **Groq LLM** (LLaMA 3.3 70B) which safely extracts the abstract metadata: core problem, severity, estimated resolution time, and the relevant IT Job Field.
+3. **RAG Vector Search** — A local Python bridge (using HuggingFace's `all-MiniLM-L6-v2`) converts the problem into a mathematical 384D vector array. C# queries PostgreSQL (`pgvector`) to find the **Top 3 matching Microsoft Documentation chunks** from an offline dataset of 14,000+ files.
+4. **Auto-Resolve Evaluation** — Llama-3 evaluates the problem natively strictly against these 3 official Microsoft Docs. If it finds an explicit, step-by-step solution, it dynamically generates an Instant Fix email.
+5. **Route & Create** — An Azure DevOps **Issue** work item is created. The extracted job field is mapped against a CSV directory to identify the correct Azure DevOps assignee. (If the RAG AI resolved it, the step-by-step solution is also appended to this ticket's Description logs!)
+6. **Notify** — A professional HTML auto-reply (with QR code) is sent out to the user. If auto-resolved, this email contains a massive green highlighted box with the exact solution and Microsoft URLs. Concurrently, a separate Custom Notification email is dispatched to the IT Assignee to alert them of the ticket.
+7. **Track & Sync** — Every ticket and state transition is comprehensively persisted to PostgreSQL. A standalone vanilla web dashboard queries this DB periodically to display real-time pipeline stats and track Azure DevOps board state changes over time.
 
 ---
 
