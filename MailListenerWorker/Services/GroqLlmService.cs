@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics;
+using Npgsql;
 using MailListenerWorker.Models;
 
 namespace MailListenerWorker.Services;
@@ -14,11 +16,13 @@ public class GroqLlmService
     private readonly string _apiKey;
     private readonly string _apiUrl;
     private readonly string _model;
+    private readonly IConfiguration _configuration;
 
     public GroqLlmService(ILogger<GroqLlmService> logger, IConfiguration configuration, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
         _apiKey = configuration["Groq:ApiKey"] ?? throw new InvalidOperationException("Missing Groq:ApiKey configuration");
         _apiUrl = configuration["Groq:ApiUrl"] ?? "https://api.groq.com/openai/v1/chat/completions";
         _model = configuration["Groq:Model"] ?? "llama-3.3-70b-versatile";
@@ -180,4 +184,131 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
             Confidence = 0.0
         };
     }
+
+    public async Task<RagVerdict> EvaluateRagSolutionAsync(string detailedDescription, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Starting RAG Evaluation for description...");
+            
+            // 1. Run Python to get the vector array string
+            var pythonPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\.venv\Scripts\python.exe";
+            var scriptPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\src\embed\query_vector.py";
+            
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = pythonPath,
+                Arguments = $"\"{scriptPath}\" \"{detailedDescription.Replace("\"", "\\\"").Replace("\n", " ")}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(processStartInfo);
+            if (process == null) throw new Exception("Failed to start python process");
+            
+            var vectorJsonStr = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            
+            if (process.ExitCode != 0)
+            {
+                var error = await process.StandardError.ReadToEndAsync(cancellationToken);
+                _logger.LogWarning("Python vector script failed: {Error}", error);
+                return CreateDefaultRagVerdict();
+            }
+
+            // 2. Search PostgreSQL database for the top 3 chunks
+            var connectionString = _configuration.GetConnectionString("DefaultConnection") 
+                ?? "Host=localhost;Port=5432;Database=helpdesk_pipeline;Username=postgres;Password=secret";
+                
+            var docsList = new List<object>();
+            
+            using (var conn = new NpgsqlConnection(connectionString))
+            {
+                await conn.OpenAsync(cancellationToken);
+                using var cmd = new NpgsqlCommand(@"
+                    SELECT document_url, document_title, chunk_text, 1 - (embedding <=> @emb::vector) AS similarity 
+                    FROM microsoft_docs 
+                    ORDER BY embedding <=> @emb::vector 
+                    LIMIT 3;", conn);
+                    
+                cmd.Parameters.AddWithValue("emb", vectorJsonStr.Trim());
+                
+                using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    docsList.Add(new {
+                        Url = reader.GetString(0),
+                        Title = reader.GetString(1),
+                        Chunk = reader.GetString(2),
+                        Similarity = reader.GetDouble(3)
+                    });
+                }
+            }
+
+            // 3. Send final payload to Groq to make the Auto-Resolve decision!
+            var docsJsonString = JsonSerializer.Serialize(docsList);
+            
+            var prompt = $$"""
+            You are a Level-3 AI Helpdesk Agent.
+
+            USER'S PROBLEM DESCRIPTION:
+            {{detailedDescription}}
+
+            OFFICIAL MICROSOFT KNOWLEDGE BASE:
+            {{docsJsonString}}
+
+            Analyze the Problem against the Knowledge Base chunks.
+            Does the Knowledge base provide a verified, explicit solution to the problem?
+
+            Respond in STRICT JSON FORMAT:
+            {
+              "hasSolution": true/false,
+              "confidenceScore": float <0.0-1.0>,
+              "proposedSolution": "Clear steps or explanation to solve the user's issue based strictly on the docs. N/A if none.",
+              "referenceUrls": ["url1", "url2"]
+            }
+            """;
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
+
+            var requestBody = new
+            {
+                model = _model,
+                messages = new[] { new { role = "user", content = prompt } },
+                temperature = 0.1,
+                response_format = new { type = "json_object" }
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+            var response = await client.PostAsync(_apiUrl, content, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Groq API error for RAG Verdict");
+                return CreateDefaultRagVerdict();
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var jsonDoc = JsonDocument.Parse(responseContent);
+            var messageContent = jsonDoc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            
+            if (string.IsNullOrEmpty(messageContent)) return CreateDefaultRagVerdict();
+            
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var verdict = JsonSerializer.Deserialize<RagVerdict>(messageContent, options);
+            
+            _logger.LogInformation("RAG Complete -> HasSolution: {HasSolution}, Confidence: {Confidence}", verdict?.HasSolution, verdict?.ConfidenceScore);
+            return verdict ?? CreateDefaultRagVerdict();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing RAG Pipeline Verdict");
+            return CreateDefaultRagVerdict();
+        }
+    }
+
+    private static RagVerdict CreateDefaultRagVerdict() => new() { HasSolution = false, ConfidenceScore = 0.0, ProposedSolution = "Error in RAG Pipeline" };
 }

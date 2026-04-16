@@ -210,6 +210,7 @@ public class MailPollingService : BackgroundService
                                     item.Id.Value.ToString(),
                                     state,
                                     null,
+                                    null,
                                     cancellationToken);
 
                                 await _adoService.AddWorkItemTagAsync(item.Id.Value, tags, expectedTag, cancellationToken);
@@ -275,6 +276,7 @@ public class MailPollingService : BackgroundService
         var initialState = "To Do";
         var assigneeEmail = _defaultAssignee;
         ExtractedEmailData? extractedData = null;
+        RagVerdict? ragVerdict = null;
         Guid ticketId = Guid.NewGuid();
 
         // ═══════════════════════════════════════════════════════════════
@@ -303,6 +305,34 @@ public class MailPollingService : BackgroundService
             await SendTmaAlertAsync(_tmaEmail, "LLM Analysis", msg.Subject, senderEmail, ex, cancellationToken);
             await MarkAsReadAsync(msg.Id!, cancellationToken);
             return;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 1.5 — RAG Verdict (AI Auto-Resolve Evaluation)
+        // ═══════════════════════════════════════════════════════════════
+        try
+        {
+            if (extractedData != null && !string.IsNullOrEmpty(extractedData.DetailedDescription))
+            {
+                ragVerdict = await _llmService.EvaluateRagSolutionAsync(
+                    extractedData.DetailedDescription, 
+                    cancellationToken);
+
+                if (ragVerdict.HasSolution && ragVerdict.ConfidenceScore > 0.70)
+                {
+                    _logger.LogInformation("🎯 PERFECT MATCH! AI Found a solution with Confidence: {Conf}", ragVerdict.ConfidenceScore);
+                    
+                    // Prepend the AI solution to the detailed description so Azure DevOps logs it clearly!
+                    extractedData.DetailedDescription = $"<h3>🤖 AI AUTO-RESOLVED SOLUTION 🤖</h3>" +
+                                                        $"<p><strong>Solution:</strong> {System.Web.HttpUtility.HtmlEncode(ragVerdict.ProposedSolution)}</p>" +
+                                                        $"<p><strong>References:</strong><br>{string.Join("<br>", ragVerdict.ReferenceUrls)}</p><hr><br>" + 
+                                                        extractedData.DetailedDescription;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "⚠️ STEP 1.5 FAILED — RAG Evaluation error for email: {Subject}. Pipeline will continue normally.", msg.Subject);
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -465,6 +495,7 @@ public class MailPollingService : BackgroundService
                     workItemId.ToString(),
                     initialState,
                     extractedData,
+                    ragVerdict,
                     cancellationToken);
                 _logger.LogInformation("Auto-reply sent to: {Email}", senderEmail);
             }
@@ -535,6 +566,7 @@ public class MailPollingService : BackgroundService
         string ticketId,
         string ticketStatus,
         ExtractedEmailData? extractedData,
+        RagVerdict? ragVerdict,
         CancellationToken cancellationToken)
     {
         var subject = originalSubject ?? "Your Request";
@@ -556,8 +588,23 @@ public class MailPollingService : BackgroundService
                   </div>
               </div>";
 
+          string aiSolutionHtml = "";
+          if (ragVerdict != null && ragVerdict.HasSolution && ragVerdict.ConfidenceScore > 0.70)
+          {
+              var refs = string.Join("<br>", ragVerdict.ReferenceUrls.Select(url => $"<a href='{url}' style='color: #16a34a;'>{url}</a>"));
+              aiSolutionHtml = $@"
+              <div style='background-color: #dcfce7; border: 1px solid #22c55e; border-radius: 8px; padding: 24px; margin: 0 32px 24px; text-align: left;'>
+                  <h3 style='color: #166534; margin-bottom: 12px; font-size: 18px;'>🤖 We have an instant solution for your issue!</h3>
+                  <p style='color: #15803d; font-size: 15px; margin-bottom: 16px; line-height: 1.5;'>{System.Web.HttpUtility.HtmlEncode(ragVerdict.ProposedSolution).Replace("\n", "<br>")}</p>
+                  <div style='font-size: 13px; color: #166534; padding-top: 10px; border-top: 1px solid #86efac;'>
+                      <strong>Official Documentation:</strong><br>{refs}
+                  </div>
+              </div>";
+          }
+
           var htmlContent = _autoReplyTemplate
               .Replace("{{LogoUrl}}", _logoUrl)
+              .Replace("{{AiSolutionHtml}}", aiSolutionHtml)
               .Replace("{{FooterLogoUrl}}", _footerLogoUrl)
               .Replace("{{RecipientName}}", recipientName)
               .Replace("{{TicketNumber}}", ticketId)
