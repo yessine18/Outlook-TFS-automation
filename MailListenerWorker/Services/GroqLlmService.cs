@@ -49,11 +49,11 @@ Extract the following fields:
 - coreProblem: A concise but specific title for a support ticket (max 150 chars). Include key identifiers (server names, error codes) in the title.
 - description: A brief 2-3 sentence summary of the issue.
 - detailedDescription: A THOROUGH description that preserves ALL specific facts, numbers, names, dates, error messages, and technical details from the email. Do NOT omit any data. This should be comprehensive enough that someone reading it has ALL the information from the original email without needing to see it.
-- affectedSystems: List ALL specific systems, servers, applications, databases, services, or infrastructure mentioned (e.g., "DB-PROD-03, Oracle 19c, SAP ERP module FI"). Use "N/A" if none mentioned.
-- errorCodes: List ALL error codes, exception messages, HTTP status codes, or diagnostic identifiers found (e.g., "ORA-12541, HTTP 503, NullReferenceException"). Use "N/A" if none.
-- stepsToReproduce: If the sender describes steps, a sequence of events, or a timeline, capture them in order. Use "N/A" if not described.
-- impactScope: Who or what is affected — user count, department names, environment (production/staging/dev), geographic scope (e.g., "200 users in Tunis office, production environment"). Use "N/A" if not specified.
-- requestedAction: What the sender is explicitly asking for or expecting as resolution (e.g., "Restart server and restore backup"). Use "N/A" if no specific action requested.
+- affectedSystems: Provide a SINGLE COMMA-SEPARATED STRING listing ALL specific systems, servers, applications, databases, or infrastructure mentioned (e.g., "DB-PROD-03, Oracle 19c"). Do NOT use JSON arrays. Use "N/A" if none.
+- errorCodes: Provide a SINGLE COMMA-SEPARATED STRING listing ALL error codes or exception messages (e.g., "ORA-12541, HTTP 503"). Do NOT use JSON arrays. Use "N/A" if none.
+- stepsToReproduce: If the sender describes steps, a sequence of events, or a timeline, capture them in order as a single string. Use "N/A" if not described.
+- impactScope: Who or what is affected — user count, department names, environment (production/staging/dev), geographic scope (e.g., "200 users, production"). Use "N/A" if not specified.
+- requestedAction: What the sender is explicitly asking for or expecting as resolution as a single string. Use "N/A" if no specific action requested.
 - estimatedHours: How many hours to resolve (integer 1-40)
 - severity: One of: Critical, High, Medium, Low
 - jobField: MANDATORY: You must select the MOST RELEVANT job field ONLY from this exact comma-separated list: [{{fieldsList}}]. Do NOT invent new fields.

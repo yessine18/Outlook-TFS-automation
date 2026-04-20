@@ -29,5 +29,14 @@ public enum PipelineStatus
     AdoFailed,
 
     /// <summary>The email notification (auto-reply or assignee) failed to send.</summary>
-    MailSendingFailed
+    MailSendingFailed,
+
+    /// <summary>Waiting for client to validate the AI resolution.</summary>
+    PendingClientValidation,
+
+    /// <summary>Client successfully validated the AI resolution.</summary>
+    ClientAcceptedResolution,
+
+    /// <summary>Client rejected the AI resolution.</summary>
+    AdoCreated
 }

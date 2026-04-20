@@ -207,10 +207,9 @@ public class AzureDevOpsService
                     };
 
                     var updatedItem = await _witClient.UpdateWorkItemAsync(tagUpdateDoc, createdWorkItem.Id ?? 0, cancellationToken: cancellationToken);
-                    if (updatedItem != null)
-                    {
-                        createdWorkItem = updatedItem;
-                    }
+                    
+                    _logger.LogInformation("Added default tags to WorkItem #{Id}", createdWorkItem.Id);
+                    return updatedItem ?? createdWorkItem;
                 }
             }
 
@@ -226,6 +225,37 @@ public class AzureDevOpsService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating work item for email: {Subject}", emailSubject);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Updates the state of an existing Azure DevOps work item via HTTP PATCH.
+    /// </summary>
+    public async Task UpdateWorkItemStateAsync(int workItemId, string newState, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var patchDocument = new JsonPatchDocument
+            {
+                new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/fields/System.State",
+                    Value = newState
+                }
+            };
+
+            await _witClient.UpdateWorkItemAsync(
+                patchDocument,
+                workItemId,
+                cancellationToken: cancellationToken);
+
+            _logger.LogInformation("✅ Successfully updated WorkItem #{WorkItemId} state to '{NewState}'", workItemId, newState);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Failed to update state to '{NewState}' for WorkItem #{WorkItemId}", newState, workItemId);
             throw;
         }
     }

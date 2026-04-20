@@ -31,6 +31,7 @@ public class MailPollingService : BackgroundService
     private readonly string _assigneeNotificationTemplate;
     private readonly string _tmaEmail = "ApplicationSupport@M365x62207154.onmicrosoft.com";
     private readonly List<string> _allowedDomains;
+    private readonly string _baseAppUrl;
 
     public MailPollingService(
         ILogger<MailPollingService> logger,
@@ -56,6 +57,7 @@ public class MailPollingService : BackgroundService
         _logoUrl = configuration["Email:LogoUrl"] ?? "https://via.placeholder.com/150x40?text=Support";
         _footerLogoUrl = configuration["Email:FooterLogoUrl"] ?? _logoUrl;
         _supportPhone = configuration["Email:SupportPhone"] ?? "+216 56 646 677";
+        _baseAppUrl = configuration["Email:BaseAppUrl"] ?? "http://localhost:5000";
         _allowedDomains = configuration.GetSection("Email:AllowedDomains").Get<List<string>>() ?? new List<string>();
 
         if (string.IsNullOrWhiteSpace(tenantId) ||
@@ -431,13 +433,22 @@ public class MailPollingService : BackgroundService
                     ticket.AdoWorkItemId = workItemId > 0 ? workItemId : null;
                     ticket.AdoItemState = initialState;
                     ticket.AdoUrl = workItemId > 0 ? $"https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{workItemId}" : null;
-                    ticket.CurrentPipelineStatus = PipelineStatus.AdoCreated;
+                    
+                    if (ragVerdict != null && ragVerdict.HasSolution && ragVerdict.ConfidenceScore > 0.70)
+                    {
+                        ticket.CurrentPipelineStatus = PipelineStatus.PendingClientValidation;
+                    }
+                    else
+                    {
+                        ticket.CurrentPipelineStatus = PipelineStatus.AdoCreated;
+                    }
+                    
                     ticket.LastUpdatedAt = DateTime.UtcNow;
 
                     ticket.StateLog.Add(new TicketStateLog
                     {
                         TicketId = ticket.TicketId,
-                        PipelineStatus = PipelineStatus.AdoCreated,
+                        PipelineStatus = ticket.CurrentPipelineStatus,
                         CreatedAt = DateTime.UtcNow
                     });
 
@@ -596,6 +607,13 @@ public class MailPollingService : BackgroundService
               <div style='background-color: #dcfce7; border: 1px solid #22c55e; border-radius: 8px; padding: 24px; margin: 0 32px 24px; text-align: left;'>
                   <h3 style='color: #166534; margin-bottom: 12px; font-size: 18px;'>🤖 We have an instant solution for your issue!</h3>
                   <p style='color: #15803d; font-size: 15px; margin-bottom: 16px; line-height: 1.5;'>{System.Web.HttpUtility.HtmlEncode(ragVerdict.ProposedSolution).Replace("\n", "<br>")}</p>
+                  
+                  <div style='margin-top: 24px; margin-bottom: 24px; padding: 16px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: center;'>
+                      <p style='color: #166534; font-size: 14px; font-weight: bold; margin-bottom: 16px;'>Did this AI solution solve your problem?</p>
+                      <a href='{_baseAppUrl}/api/ticket/{ticketId}/validate?accepted=true' style='display: inline-block; background-color: #22c55e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-right: 12px;'>✅ Yes, close ticket</a>
+                      <a href='{_baseAppUrl}/api/ticket/{ticketId}/validate?accepted=false' style='display: inline-block; background-color: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;'>❌ No, I need support</a>
+                  </div>
+
                   <div style='font-size: 13px; color: #166534; padding-top: 10px; border-top: 1px solid #86efac;'>
                       <strong>Official Documentation:</strong><br>{refs}
                   </div>

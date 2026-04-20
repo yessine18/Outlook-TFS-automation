@@ -60,6 +60,70 @@ app.MapGet("/api/stats", async (AppDbContext db) =>
     return new { Total = total, Processed = processed, Failed = failed };
 });
 
+// ── Minimal API: Validation Endpoint ─────────────────
+app.MapGet("/api/ticket/{id:int}/validate", async (int id, bool accepted, AppDbContext db, AzureDevOpsService adoService, ILogger<Program> logger) =>
+{
+    var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.AdoWorkItemId == id);
+    if (ticket == null)
+    {
+        return Results.Content("<html><body style='font-family:sans-serif;text-align:center;padding:50px;'><h2>Ticket Not Found</h2><p>The ticket ID provided is invalid or does not exist.</p></body></html>", "text/html");
+    }
+
+    if (ticket.AdoWorkItemId == null)
+    {
+         return Results.Content("<html><body style='font-family:sans-serif;text-align:center;padding:50px;'><h2>Not Ready</h2><p>This ticket hasn't been synced to Azure DevOps yet.</p></body></html>", "text/html");
+    }
+
+    // Protection to avoid validating multiple times if already processed
+    if (ticket.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.ClientAcceptedResolution || 
+        ticket.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.ClientRejectedResolution)
+    {
+        return Results.Content("<html><body style='font-family:sans-serif;text-align:center;padding:50px;'><h2>Already Processed</h2><p>You have already validated this ticket.</p></body></html>", "text/html");
+    }
+
+    try 
+    {
+        if (accepted)
+        {
+            await adoService.UpdateWorkItemStateAsync(ticket.AdoWorkItemId.Value, "Done");
+            ticket.AdoItemState = "Done";
+            ticket.CurrentPipelineStatus = MailListenerWorker.Models.Enums.PipelineStatus.ClientAcceptedResolution;
+            
+            ticket.StateLog.Add(new MailListenerWorker.Models.TicketStateLog
+            {
+                TicketId = ticket.TicketId,
+                PipelineStatus = ticket.CurrentPipelineStatus,
+                CreatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            return Results.Content("<html><head><meta charset='UTF-8'></head><body style='font-family:sans-serif;text-align:center;padding:50px;background:#f0fdf4;'><h2 style='color:#166534;'>✅ Validation Successful</h2><p>Thank you! The ticket has been closed.</p></body></html>", "text/html; charset=utf-8");
+        }
+        else 
+        {
+            // Even if it was already "To Do", this explicitly keeps it there and updates our DB tracking.
+            await adoService.UpdateWorkItemStateAsync(ticket.AdoWorkItemId.Value, "To Do");
+            ticket.AdoItemState = "To Do";
+            ticket.CurrentPipelineStatus = MailListenerWorker.Models.Enums.PipelineStatus.ClientRejectedResolution;
+
+            ticket.StateLog.Add(new MailListenerWorker.Models.TicketStateLog
+            {
+                TicketId = ticket.TicketId,
+                PipelineStatus = ticket.CurrentPipelineStatus,
+                CreatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            return Results.Content("<html><head><meta charset='UTF-8'></head><body style='font-family:sans-serif;text-align:center;padding:50px;background:#fefce8;'><h2 style='color:#854d0e;'>❌ Support Requested</h2><p>We've kept this ticket assigned to our human agents. They will assist you shortly.</p></body></html>", "text/html; charset=utf-8");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to update validation state for ticket {TicketId}", id);
+        return Results.Content("<html><head><meta charset='UTF-8'></head><body style='font-family:sans-serif;text-align:center;padding:50px;background:#fef2f2;'><h2 style='color:#991b1b;'>⚠️ Error Processing Validation</h2><p>Please contact IT Support directly.</p></body></html>", "text/html; charset=utf-8");
+    }
+});
+
 app.MapFallbackToFile("index.html");
 
 app.Run();
