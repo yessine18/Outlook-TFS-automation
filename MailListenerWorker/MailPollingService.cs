@@ -523,6 +523,22 @@ public class MailPollingService : BackgroundService
                     extractedData.EstimatedHours,
                     cancellationToken);
             }
+
+            // Microsoft Teams Notification (via Job Mapping)
+            // Send Adaptive Card alert to the correct Teams Channel Webhook
+            var deptMapping = _jobFieldService.GetMapping(extractedData.JobField);
+            if (deptMapping != null && !string.IsNullOrWhiteSpace(deptMapping.WebhookUrl))
+            {
+                bool isRagResolved = ragVerdict != null && ragVerdict.HasSolution && ragVerdict.ConfidenceScore > 0.70;
+                await SendTeamsNotificationAsync(
+                    deptMapping.WebhookUrl,
+                    workItemId.ToString(),
+                    extractedData,
+                    senderName ?? "Unknown",
+                    senderEmail,
+                    isRagResolved,
+                    cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -822,6 +838,109 @@ public class MailPollingService : BackgroundService
         // Abort the process immediately as requested to prevent cascading errors
         _logger.LogCritical("🛑 Halting process immediately due to pipeline error in step: {Step}", failedStep);
         Environment.Exit(1);
+    }
+
+    private async Task SendTeamsNotificationAsync(
+        string webhookUrl,
+        string ticketId,
+        ExtractedEmailData extractedData,
+        string senderName,
+        string senderEmail,
+        bool isRagResolved,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ticketUrl = $"https://dev.azure.com/yessinefakhfakh/PFE-automation/_workitems/edit/{ticketId}";
+            var themeColor = isRagResolved ? "good" : "warning";
+            var statusText = isRagResolved ? "Instant RAG Solution Suggested ✅" : "Needs Human Assignment ⚠️";
+            var descriptionJson = System.Text.Json.JsonSerializer.Serialize(extractedData.Description ?? "No description");
+            var titleJson = System.Text.Json.JsonSerializer.Serialize(extractedData.CoreProblem ?? "New Ticket");
+
+            var cardJson = $$""""
+            {
+                "type": "AdaptiveCard",
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "version": "1.4",
+                "body": [
+                    {
+                        "type": "Container",
+                        "style": "{{themeColor}}",
+                        "items": [
+                            {
+                                "type": "TextBlock",
+                                "text": "🎯 New Azure DevOps Ticket #{{ticketId}}",
+                                "weight": "Bolder",
+                                "size": "Large"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "TextBlock",
+                        "text": {{titleJson}},
+                        "weight": "Bolder",
+                        "size": "Medium",
+                        "wrap": true
+                    },
+                    {
+                        "type": "FactSet",
+                        "facts": [
+                            { "title": "Sender:", "value": "{{senderName}} ({{senderEmail}})" },
+                            { "title": "Severity:", "value": "{{extractedData.Severity}}" },
+                            { "title": "Priority:", "value": "P{{extractedData.GetPriority()}}" },
+                            { "title": "Job Field:", "value": "{{extractedData.JobField}}" },
+                            { "title": "Status:", "value": "{{statusText}}" }
+                        ]
+                    },
+                    {
+                        "type": "TextBlock",
+                        "text": {{descriptionJson}},
+                        "wrap": true,
+                        "isSubtle": true
+                    }
+                ],
+                "actions": [
+                    {
+                        "type": "Action.OpenUrl",
+                        "title": "Open Work Item in ADO",
+                        "url": "{{ticketUrl}}"
+                    }
+                ]
+            }
+            """";
+
+            // Wrap the Adaptive Card in the mandatory 'message' format for Power Automate Webhooks
+            var payloadJson = $$""""
+            {
+                "type": "message",
+                "attachments": [
+                    {
+                        "contentType": "application/vnd.microsoft.card.adaptive",
+                        "contentUrl": null,
+                        "content": {{cardJson}}
+                    }
+                ]
+            }
+            """";
+
+            using var httpClient = new HttpClient();
+            var content = new StringContent(payloadJson, System.Text.Encoding.UTF8, "application/json");
+            var response = await httpClient.PostAsync(webhookUrl, content, cancellationToken);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("✅ Sent Adaptive Card notification to Webhook for ticket {TicketId}", ticketId);
+            }
+            else
+            {
+                var errorString = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("⚠️ Failed to send Teams notification. Status: {Status}, Error: {Error}", response.StatusCode, errorString);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Failed to send Teams notification to Webhook. Exception: {Message}", ex.Message);
+        }
     }
 
     private static string LoadEmailTemplate(string templateName)

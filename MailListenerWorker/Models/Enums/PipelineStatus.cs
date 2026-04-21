@@ -38,5 +38,5 @@ public enum PipelineStatus
     ClientAcceptedResolution,
 
     /// <summary>Client rejected the AI resolution.</summary>
-    AdoCreated
+    ClientRejectedResolution
 }

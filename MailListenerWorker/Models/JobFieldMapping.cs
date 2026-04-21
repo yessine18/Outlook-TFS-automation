@@ -8,4 +8,7 @@ public class JobFieldMapping
     public string JobField { get; set; } = string.Empty;  // e.g., "Administrator", "Dynamics/CRM"
     public string Email { get; set; } = string.Empty;     // User principal name
     public string Department { get; set; } = string.Empty; // Category (organization grouping)
+    public string TeamId { get; set; } = string.Empty;
+    public string ChannelId { get; set; } = string.Empty;
+    public string WebhookUrl { get; set; } = string.Empty;
 }

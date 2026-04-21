@@ -23,5 +23,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Templates\*.html" />
+    <None Update="departements.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

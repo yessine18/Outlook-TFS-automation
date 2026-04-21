@@ -69,7 +69,10 @@ public class JobFieldMappingService
                 {
                     JobField = record.DisplayName.Trim(),
                     Email = record.Email.Trim(),
-                    Department = record.Department?.Trim() ?? string.Empty
+                    Department = record.Department?.Trim() ?? string.Empty,
+                    TeamId = record.TeamId?.Trim() ?? string.Empty,
+                    ChannelId = record.ChannelId?.Trim() ?? string.Empty,
+                    WebhookUrl = record.WebhookUrl?.Trim() ?? string.Empty
                 };
 
                 _jobFieldCache[mapping.JobField] = mapping;
@@ -132,5 +135,14 @@ public class JobFieldMappingService
 
         [Name("Department")]
         public string Department { get; set; } = string.Empty;
+
+        [Name("TeamId")] // The CSV in the downloads folder accidentally has a trailing space on 'TeamId ' 
+        public string TeamId { get; set; } = string.Empty;
+
+        [Name("ChannelId")]
+        public string ChannelId { get; set; } = string.Empty;
+
+        [Name("WebhookUrl")]
+        public string WebhookUrl { get; set; } = string.Empty;
     }
 }
