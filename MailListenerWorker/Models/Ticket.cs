@@ -64,6 +64,14 @@ public class Ticket
     /// </summary>
     public string? AdoItemState { get; set; }
 
+    // ───────────────────────── Client Feedback ───────────────────
+
+    /// <summary>Rating provided by the client upon ticket closure (e.g. 1-5 stars).</summary>
+    public int? ClientRating { get; set; }
+
+    /// <summary>Written feedback provided by the client upon ticket closure.</summary>
+    public string? ClientFeedback { get; set; }
+
     // ───────────────────────── Pipeline Tracking ───────────────
 
     /// <summary>

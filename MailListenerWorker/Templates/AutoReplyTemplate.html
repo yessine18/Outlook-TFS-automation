@@ -146,6 +146,7 @@
         .badge-medium { background: #e0f2fe; color: #075985; }
         .badge-low { background: #dcfce7; color: #166534; }
     </style>
+    {{AdaptiveCardScript}}
 </head>
 <body>
     <div class="wrapper">
@@ -167,7 +168,7 @@
             <!-- Hero using Dynamic Subject -->
             <div class="hero">
                 <div class="hero-title">{{TicketTitle}}</div>
-                <div class="hero-text">Hi <span class="username">{{RecipientName}}</span>, your request point has been secured. Our technical team is actively reviewing your issue parameters.</div>
+                <div class="hero-text">{{HeroText}}</div>
             </div>
 
             <!-- Optional AI Solution injected if auto-resolved -->

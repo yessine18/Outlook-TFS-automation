@@ -267,8 +267,8 @@ public class AzureDevOpsService
         string? assigneeEmail)
     {
         var metadata = $"<br/><div style=\"display:none;\">" +
-                      $"<span data-sender-email=\"{senderEmail}\"></span>" +
-                      $"<span data-sender-name=\"{senderName}\"></span>";
+                      $"<span data-sender-email=\"{HtmlEncode(senderEmail)}\"></span>" +
+                      $"<span data-sender-name=\"{HtmlEncode(senderName)}\"></span>";
 
         if (extractedData != null)
         {
@@ -367,6 +367,33 @@ public class AzureDevOpsService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error adding tag to work item #{WorkItemId}", workItemId);
+        }
+    }
+    public async Task AddWorkItemCommentAsync(int workItemId, string commentText, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var patchDocument = new JsonPatchDocument
+            {
+                new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/fields/System.History",
+                    Value = commentText
+                }
+            };
+
+            await _witClient.UpdateWorkItemAsync(
+                patchDocument,
+                workItemId,
+                validateOnly: false,
+                cancellationToken: cancellationToken);
+                
+            _logger.LogInformation("Added feedback comment to WorkItem #{WorkItemId}", workItemId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding comment to work item #{WorkItemId}", workItemId);
         }
     }
 }

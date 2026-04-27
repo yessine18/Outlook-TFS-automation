@@ -123,6 +123,48 @@ app.MapGet("/api/ticket/{id:int}/validate", async (int id, bool accepted, AppDbC
         return Results.Content("<html><head><meta charset='UTF-8'></head><body style='font-family:sans-serif;text-align:center;padding:50px;background:#fef2f2;'><h2 style='color:#991b1b;'>⚠️ Error Processing Validation</h2><p>Please contact IT Support directly.</p></body></html>", "text/html; charset=utf-8");
     }
 });
+// ── Minimal API: Submit Feedback (Adaptive Card) ─────────
+app.MapPost("/api/ticket/{id:int}/feedback", async (int id, [Microsoft.AspNetCore.Mvc.FromBody] MailListenerWorker.Models.FeedbackPayload payload, AppDbContext db, AzureDevOpsService adoService, ILogger<Program> logger) =>
+{
+    try
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.AdoWorkItemId == id);
+        if (ticket == null) return Results.NotFound();
+
+        // Parse rating
+        int.TryParse(payload.rating, out int ratingValue);
+        
+        ticket.ClientRating = ratingValue;
+        ticket.ClientFeedback = payload.comment;
+        ticket.LastUpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+
+        // Add beautiful HTML comment to Azure DevOps
+        var safeComment = System.Web.HttpUtility.HtmlEncode(payload.comment ?? "").Replace("\n", "<br>");
+        var comment = $@"
+        <div style='border-left: 4px solid #22c55e; padding: 12px; margin: 10px 0; background-color: #f0fdf4; border-radius: 4px; font-family: ""Segoe UI"", Tahoma, Geneva, Verdana, sans-serif;'>
+            <h3 style='margin-top: 0; margin-bottom: 12px; color: #166534; font-size: 16px;'>📊 Client Feedback Received</h3>
+            <div style='margin-bottom: 10px;'>
+                <strong style='color: #166534;'>Rating:</strong> <span style='font-size: 16px; color: #d97706;'>⭐ {payload.rating} / 5</span>
+            </div>
+            <div>
+                <strong style='color: #166534;'>Comment:</strong>
+                <div style='margin-top: 6px; padding: 10px; background-color: #ffffff; border: 1px solid #bbf7d0; border-radius: 4px; color: #374151; font-style: italic;'>
+                    {(string.IsNullOrWhiteSpace(safeComment) ? "<span style='color: #9ca3af;'>No additional comment provided.</span>" : safeComment)}
+                </div>
+            </div>
+        </div>";
+        await adoService.AddWorkItemCommentAsync(id, comment);
+
+        return Results.Ok();
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to process feedback for ticket {TicketId}", id);
+        return Results.StatusCode(500);
+    }
+});
 
 app.MapFallbackToFile("index.html");
 

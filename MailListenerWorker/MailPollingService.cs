@@ -233,15 +233,15 @@ public class MailPollingService : BackgroundService
 
     private static string ExtractHtmlAttribute(string html, string attributeName)
     {
-        var searchString = $"{attributeName}=\"";
-        var startIndex = html.IndexOf(searchString);
-        if (startIndex == -1) return string.Empty;
-
-        startIndex += searchString.Length;
-        var endIndex = html.IndexOf("\"", startIndex);
-        if (endIndex == -1) return string.Empty;
-
-        return html.Substring(startIndex, endIndex - startIndex);
+        if (string.IsNullOrEmpty(html)) return string.Empty;
+        var match = System.Text.RegularExpressions.Regex.Match(html, $@"{attributeName}\s*=\s*(?:""([^""]*)""|'([^']*)'|([^\s>]+))", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            if (match.Groups[1].Success) return match.Groups[1].Value;
+            if (match.Groups[2].Success) return match.Groups[2].Value;
+            if (match.Groups[3].Success) return match.Groups[3].Value;
+        }
+        return string.Empty;
     }
 
     private async Task ProcessEmailAsync(Message msg, CancellationToken cancellationToken)
@@ -636,7 +636,116 @@ public class MailPollingService : BackgroundService
               </div>";
           }
 
+          string heroText = $"Hi <span class=\"username\">{recipientName}</span>, your request point has been secured. Our technical team is actively reviewing your issue parameters.";
+          string adaptiveCardScript = "";
+
+          if (ticketStatus.Equals("Done", StringComparison.OrdinalIgnoreCase) || 
+              ticketStatus.Equals("Closed", StringComparison.OrdinalIgnoreCase))
+          {
+              heroText = $"Hi <span class=\"username\">{recipientName}</span>, we are confirming that your issue is officially closed. If you have another problem, please don't hesitate to contact us.";
+              
+              adaptiveCardScript = $@"
+              <script type=""application/adaptivecard+json"">
+              {{
+                  ""type"": ""AdaptiveCard"",
+                  ""version"": ""1.0"",
+                  ""originator"": ""0750482f-1650-4378-b145-f8efedf44dde"",
+                  ""hideOriginalBody"": false,
+                  ""body"": [
+                      {{
+                          ""type"": ""Container"",
+                          ""style"": ""emphasis"",
+                          ""bleed"": true,
+                          ""items"": [
+                              {{
+                                  ""type"": ""ColumnSet"",
+                                  ""columns"": [
+                                      {{
+                                          ""type"": ""Column"",
+                                          ""width"": ""auto"",
+                                          ""items"": [
+                                              {{
+                                                  ""type"": ""Image"",
+                                                  ""url"": ""{_logoUrl}"",
+                                                  ""size"": ""Medium""
+                                              }}
+                                          ]
+                                      }},
+                                      {{
+                                          ""type"": ""Column"",
+                                          ""width"": ""stretch"",
+                                          ""verticalContentAlignment"": ""Center"",
+                                          ""items"": [
+                                              {{
+                                                  ""type"": ""TextBlock"",
+                                                  ""text"": ""Helpdesk Feedback"",
+                                                  ""weight"": ""Bolder"",
+                                                  ""size"": ""Large"",
+                                                  ""color"": ""Accent""
+                                              }},
+                                              {{
+                                                  ""type"": ""TextBlock"",
+                                                  ""text"": ""Ticket #{ticketId} has been closed. We'd love to hear about your experience!"",
+                                                  ""isSubtle"": true,
+                                                  ""wrap"": true
+                                              }}
+                                          ]
+                                      }}
+                                  ]
+                              }}
+                          ]
+                      }},
+                      {{
+                          ""type"": ""TextBlock"",
+                          ""text"": ""How would you rate the support you received?"",
+                          ""weight"": ""Bolder"",
+                          ""size"": ""Medium"",
+                          ""spacing"": ""Medium""
+                      }},
+                      {{
+                          ""type"": ""Input.ChoiceSet"",
+                          ""id"": ""rating"",
+                          ""style"": ""expanded"",
+                          ""choices"": [
+                              {{ ""title"": ""⭐⭐⭐⭐⭐  Excellent & Fast"", ""value"": ""5"" }},
+                              {{ ""title"": ""⭐⭐⭐⭐  Good"", ""value"": ""4"" }},
+                              {{ ""title"": ""⭐⭐⭐  Average"", ""value"": ""3"" }},
+                              {{ ""title"": ""⭐⭐  Fair"", ""value"": ""2"" }},
+                              {{ ""title"": ""⭐  Poor"", ""value"": ""1"" }}
+                          ]
+                      }},
+                      {{
+                          ""type"": ""TextBlock"",
+                          ""text"": ""Any additional comments? (Optional)"",
+                          ""weight"": ""Bolder"",
+                          ""spacing"": ""Medium""
+                      }},
+                      {{
+                          ""type"": ""Input.Text"",
+                          ""id"": ""comment"",
+                          ""placeholder"": ""Tell us what we did well or how we can improve..."",
+                          ""isMultiline"": true
+                      }}
+                  ],
+                  ""actions"": [
+                      {{
+                          ""type"": ""Action.Http"",
+                          ""title"": ""Submit Feedback"",
+                          ""method"": ""POST"",
+                          ""url"": ""{_baseAppUrl}/api/ticket/{ticketId}/feedback"",
+                          ""body"": ""{{ \""rating\"": \""{{{{rating.value}}}}\"", \""comment\"": \""{{{{comment.value}}}}\"" }}"",
+                          ""headers"": [
+                              {{ ""name"": ""Content-Type"", ""value"": ""application/json"" }}
+                          ]
+                      }}
+                  ]
+              }}
+              </script>";
+          }
+
           var htmlContent = _autoReplyTemplate
+              .Replace("{{AdaptiveCardScript}}", adaptiveCardScript)
+              .Replace("{{HeroText}}", heroText)
               .Replace("{{LogoUrl}}", _logoUrl)
               .Replace("{{AiSolutionHtml}}", aiSolutionHtml)
               .Replace("{{FooterLogoUrl}}", _footerLogoUrl)

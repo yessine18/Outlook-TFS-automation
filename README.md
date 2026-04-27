@@ -40,9 +40,12 @@ flowchart LR
     G -->|Standard Confirmation| H
     E -->|REST API| J["📊 Live Dashboard"]
     
-    %% Client Validation
+    %% Client Validation & Feedback
     H -.->|Validation Links| K["✅/❌ Client Validation Webhook API"]
     K -->|Resolve/Re-open| G
+    H -.->|Actionable Message| M["⭐ Outlook Adaptive Card Feedback"]
+    M -->|Update Discussion| G
+    M -->|Persist Rating| E
 
     %% Teams Alerts
     G -->|Power Automate Webhook| L["💬 Microsoft Teams Adaptive Card"]
@@ -56,6 +59,7 @@ flowchart LR
 6. **Notify** — A professional HTML auto-reply (with QR code) is sent out to the user. If auto-resolved, this email contains a massive green highlighted box with the exact solution and Microsoft URLs. Concurrently, a separate Custom Notification email is dispatched to the IT Assignee to alert them of the ticket.
 7. **Teams Alert** — An **Adaptive Card** is immediately fired to the correct Microsoft Teams channel (mapped per job field via Power Automate Webhooks), displaying ticket details, priority, status, and a direct ADO link — color-coded 🟢 green for RAG-resolved or 🟠 orange for human-assigned tickets.
 8. **Track & Sync** — Every ticket and state transition is comprehensively persisted to PostgreSQL. A standalone vanilla web dashboard queries this DB periodically to display real-time pipeline stats and track Azure DevOps board state changes over time.
+9. **Interactive Feedback** — When a ticket is marked as Done/Closed in ADO, the worker syncs the state and sends a closure email containing an **Outlook Actionable Message (Adaptive Card)**. Clients can rate the support directly inside Outlook, instantly logging their feedback to the PostgreSQL database and appending a beautiful HTML summary to the Azure DevOps Work Item discussion.
 
 ---
 
@@ -74,6 +78,7 @@ flowchart LR
 | 👤 **Assignee Notifications** | Dedicated email notifications to the assigned team member |
 | 🔄 **State Sync** | Polls ADO board and sends status update emails on human state changes |
 | 🗄️ **Full Audit Trail** | PostgreSQL database tracks every ticket and state transition |
+| ⭐ **Outlook Actionable Messages** | In-email Adaptive Card feedback forms synced directly to Azure DevOps history |
 | 🛡️ **Graceful Fallback** | If the AI is unsure, the ticket safely generates as normal for a human agent |
 
 ---
@@ -186,6 +191,7 @@ PFE/
 
 - [x] **RAG Integration** — Retrieval-Augmented Generation using a local `pgvector` database to instantly auto-answer client questions with 100% safe guardrails.
 - [x] **Client Validation Architecture** — Auto-inserted Webhook logic letting end-users safely validate RAG answers.
+- [x] **Outlook Actionable Messages** — Native in-email Adaptive Cards allowing clients to submit ratings and feedback that sync directly to Azure DevOps.
 - [x] **Microsoft Teams Notifications** — Per-department Adaptive Card alerts via Power Automate Webhooks, color-coded by outcome.
 - [ ] **CI/CD Pipeline** — Azure DevOps pipeline for automated build, test, and deployment
 - [x] **Enhanced Error Routing** — Fallback mechanism for pipeline failures alerting the TMA Support Team.
