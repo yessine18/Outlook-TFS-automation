@@ -187,12 +187,84 @@ PFE/
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap (Chronological Build Order)
 
-- [x] **RAG Integration** — Retrieval-Augmented Generation using a local `pgvector` database to instantly auto-answer client questions with 100% safe guardrails.
-- [x] **Client Validation Architecture** — Auto-inserted Webhook logic letting end-users safely validate RAG answers.
-- [x] **Outlook Actionable Messages** — Native in-email Adaptive Cards allowing clients to submit ratings and feedback that sync directly to Azure DevOps.
-- [x] **Microsoft Teams Notifications** — Per-department Adaptive Card alerts via Power Automate Webhooks, color-coded by outcome.
+### Phase 1 — Foundation & Core Infrastructure
+- [x] **Project Scaffolding** — .NET Worker Service project creation with `Microsoft.NET.Sdk.Web`, dependency injection, and configuration management
+- [x] **Azure AD Authentication** — App Registration with `ClientSecretCredential` (OAuth2 Client Credentials flow) for daemon-based access to Microsoft Graph
+- [x] **User Secrets Management** — Secure local credential storage via `dotnet user-secrets` for TenantId, ClientId, ClientSecret, and PAT tokens
+- [x] **Microsoft Graph SDK Integration** — `GraphServiceClient` setup for reading, sending, and patching Outlook emails programmatically
+
+### Phase 2 — Email Polling & Processing
+- [x] **Background Worker Service** — `BackgroundService` with infinite loop polling the shared Outlook mailbox every 60 seconds via `MailFolders["Inbox"].Messages.GetAsync()`
+- [x] **Email Ingestion Pipeline** — Fetch top 10 unread messages, extract sender, subject, body, and timestamp metadata
+- [x] **Mark-as-Read Deduplication** — Automatically mark processed emails as read via `PatchAsync()` to prevent re-processing
+
+### Phase 3 — AI-Powered Analysis
+- [x] **Groq LLM Integration** — HTTP client to Groq Cloud API (`llama-3.3-70b-versatile`) for structured email metadata extraction (coreProblem, severity, jobField, detailedDescription, etc.)
+- [x] **Constrained Job Field Extraction** — LLM prompt engineering to force classification strictly against valid CSV-defined job fields, preventing hallucinated departments
+- [x] **Graceful LLM Fallback** — Safe `CreateDefaultExtractedData()` fallback when LLM fails, ensuring the pipeline never crashes on AI errors
+
+### Phase 4 — Azure DevOps Automation
+- [x] **Azure DevOps Work Item Creation** — `JsonPatchDocument`-based Issue creation with title, description, priority, tags, and assignee via `WorkItemTrackingHttpClient`
+- [x] **CSV-Based Intelligent Routing** — `CsvHelper`-powered `departements.csv` parser mapping Job Fields to assignee emails, departments, and webhook URLs
+- [x] **Assignee Identity Resilience** — Catch `VssServiceException` for unknown ADO identities and retry without assignee, preventing pipeline failures
+- [x] **Hidden Metadata Embedding** — Store sender email/name as invisible `data-*` HTML attributes inside the ADO Work Item Description for later retrieval during state sync
+
+### Phase 5 — Email Notifications
+- [x] **Professional HTML Auto-Reply** — Embedded resource HTML template (`AutoReplyTemplate.html`) with ticket number, severity badge, estimated resolution time, and dynamic variable replacement
+- [x] **QR Code Generation** — Base64-encoded QR code data URI pointing to the ADO Work Item URL, embedded directly in the auto-reply email
+- [x] **Assignee Notification Emails** — Dedicated HTML notification email dispatched to the assigned IT engineer with ticket details and priority
+- [x] **Personalized Closure Emails** — Dynamic hero text that changes based on ticket state (open vs. Done/Closed), addressing the client by name
+
+### Phase 6 — Database & Audit Trail
+- [x] **PostgreSQL + Entity Framework Core** — `AppDbContext` with `Tickets` and `TicketStateLogs` tables, Fluent API configuration, and `UseNpgsql()` provider
+- [x] **Database-First Persistence** — Ticket saved to PostgreSQL BEFORE creating the ADO Work Item, ensuring data safety even if ADO fails
+- [x] **Pipeline State Machine** — 10-value `PipelineStatus` enum (EmailReceived → LlmProcessing → AdoCreated → etc.) stored as string column for human readability
+- [x] **Immutable Audit Log** — `TicketStateLogs` table recording every state transition with timestamp and optional error message
+- [x] **Scoped DbContext Pattern** — `IServiceScopeFactory` to create fresh DbContext instances inside the Singleton background service, avoiding lifetime conflicts
+
+### Phase 7 — ADO State Synchronization
+- [x] **WIQL Polling** — Periodic Azure DevOps WIQL query fetching all `AutoCreated`-tagged work items changed in the last 30 days
+- [x] **Bidirectional State Sync** — Compare ADO board state with PostgreSQL state and update DB on mismatch
+- [x] **State-Change Email Notifications** — Automatic email to the original sender when their ticket state changes (To Do → Doing → Done)
+- [x] **Tag-Based Email Deduplication** — `EmailSent_{State}` tags appended to ADO Work Items to prevent duplicate notification emails across polling cycles
+
+### Phase 8 — Spam Filtering & Security
+- [x] **Domain Whitelist Filter** — `Email:AllowedDomains` configuration array to process only emails from authorized company domains, silently skipping spam
+- [x] **Input Sanitization** — `HtmlEncode()` on all user-supplied content (feedback, comments) to prevent XSS (cross site scripting) injection in ADO discussions for malscious users & scripts (JS)!!!!
+
+### Phase 9 — RAG Auto-Resolution Engine
+- [x] **Microsoft Docs Knowledge Base** — Python scraper pipeline (`fetch/` → `scrape/` → `parse/` → `embed/`) processing 14,000+ Microsoft Documentation files
+- [x] **Vector Embedding Pipeline** — `sentence-transformers` (`all-MiniLM-L6-v2`) batch-encoding documents into 384-dimensional vectors stored in PostgreSQL via `pgvector`
+- [x] **Python–C# Bridge** — Child process spawning (`python.exe query_vector.py`) with stdout JSON capture for real-time vector generation from C#
+- [x] **Cosine Similarity Search** — Raw `NpgsqlConnection` SQL query using the `<=>` pgvector operator to find Top 3 matching documentation chunks
+- [x] **LLM Verdict Engine** — Second Groq call with `temperature: 0.1` evaluating whether retrieved documents contain an explicit, step-by-step solution (structured `RagVerdict` JSON output)
+- [x] **AI Solution Email Injection** — Green-highlighted solution box with Accept/Reject validation buttons injected into auto-reply emails for RAG-resolved tickets
+
+### Phase 10 — Client Validation & Feedback
+- [x] **REST Validation Endpoints** — Minimal API `GET /api/ticket/{id}/validate?accepted=true|false` for client-side Accept/Reject via email button clicks
+- [x] **ADO State Mutation** — Accepted = set to "Done", Rejected = keep at "To Do" or "Doing", with corresponding `PipelineStatus` updates (ClientAcceptedResolution / ClientRejectedResolution)
+- [x] **Duplicate Validation Protection** — Check `CurrentPipelineStatus` to prevent clients from validating the same ticket multiple times
+- [x] **Outlook Actionable Messages** — `<script type="application/adaptivecard+json">` embedded in closure emails with star rating (1–5) and comment form, submitted via `Action.Http` POST
+- [x] **Feedback Persistence** — `POST /api/ticket/{id}/feedback` endpoint saving `ClientRating` and `ClientFeedback` to PostgreSQL and appending styled HTML comment to ADO Work Item Discussion
+
+### Phase 11 — Microsoft Teams Notifications
+- [x] **Power Automate Webhook Integration** — Per-department webhook URLs stored in `departements.csv`, resolved dynamically per ticket
+- [x] **Adaptive Card v1.4 Alerts** — Rich Teams cards with ticket details, priority, assignee, status, and direct ADO link
+- [x] **Color-Coded Outcome Cards** — Green (🟢) for RAG-resolved tickets, Orange (🟠) for human-assigned tickets
+
+### Phase 12 — Error Handling & Reliability
+- [x] **TMA Alert System** — Formatted HTML error report emails sent to the Application Support team on any pipeline failure, including failed step, error type, and timestamp
+- [x] **Step-Level Error Isolation** — Each pipeline step (LLM → DB → ADO → Email) wrapped in independent try/catch blocks so downstream steps can survive upstream failures
+- [x] **Graceful RAG Degradation** — If RAG fails, pipeline continues normally without auto-resolution (no crash)
+- [x] **Database Error Status Tracking** — Failed steps update the ticket's `PipelineStatus` to `AdoFailed` or `MailSendingFailed` with error messages logged in `TicketStateLogs`
+
+### Phase 13 — Dashboard & Monitoring
+- [x] **Live Dashboard SPA** — Vanilla HTML/CSS/JS static frontend served via Kestrel (`UseStaticFiles()` + `MapFallbackToFile("index.html")`)
+- [x] **Dashboard REST API** — `GET /api/tickets` (latest 50) and `GET /api/stats` (total/processed/failed counts) endpoints with CORS support
+
+### 🔜 Upcoming
+- [ ] **Advanced Email Handling** — Email thread support (ConversationId tracking), inline images, and large attachments
 - [ ] **CI/CD Pipeline** — Azure DevOps pipeline for automated build, test, and deployment
-- [x] **Enhanced Error Routing** — Fallback mechanism for pipeline failures alerting the TMA Support Team.
-- [ ] **Advanced Email Handling** — Support for email threads, inline images, and large attachments.
+- [ ] **Production Deployment** — Docker containerization and Azure cloud deployment (App Service / Container Instance + PostgreSQL Flexible Server + Key Vault)
