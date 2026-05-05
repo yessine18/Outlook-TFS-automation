@@ -22,15 +22,20 @@ flowchart LR
     A["📨 Outlook Inbox"] -->|MS Graph API| B["🔄 Mail Polling Service"]
     B -->|Email Body| C["🤖 Groq LLM Extraction"]
     
-    subgraph AI Auto-Resolve Pipeline
-        C -->|Detailed Problem| D["🐍 Python Vectorizer (Local)"]
-        D -->|384D Math Array| E["🗄️ PostgreSQL (pgvector)"]
-        E -->|Top 3 Docs| F["🧠 Groq LLM AI Verdict"]
+    subgraph Agentic RAG Pipeline
+        C -->|Detailed Problem| D["🧠 Python LangGraph Orchestrator"]
+        
+        %% Agent Tools
+        D <-->|Tool: pgvector_kb| E["🗄️ PostgreSQL (Internal Docs)"]
+        D <-->|Tool: ms_learn_mcp| F["🔌 Learn Catalog MCP Server"]
+        F <-->|REST API| F2["🌐 Microsoft Learn Platform"]
+        
+        D -->|JSON RagVerdict| F3["⚡ Final AI Verdict"]
     end
     
     %% RAG Outcomes
-    F -->|Verdict: Has Solution| H["🟢 Fast Auto-Reply (with Solution)"]
-    F -->|Verdict: No Solution| G["📋 Azure DevOps Work Item"]
+    F3 -->|Verdict: Has Solution| H["🟢 Fast Auto-Reply (with Solution)"]
+    F3 -->|Verdict: No Solution| G["📋 Azure DevOps Work Item"]
 
     %% Human Routing & Infrastructure
     G -->|State Sync| E
@@ -53,9 +58,9 @@ flowchart LR
 
 1. **Poll** — The worker service natively monitors a shared support Outlook mailbox every 60 seconds via the Microsoft Graph API.
 2. **Analyze** — Each new email is sent to **Groq LLM** (LLaMA 3.3 70B) which safely extracts the abstract metadata: core problem, severity, estimated resolution time, and the relevant IT Job Field.
-3. **RAG Vector Search** — A local Python bridge (using HuggingFace's `all-MiniLM-L6-v2`) converts the problem into a mathematical 384D vector array. C# queries PostgreSQL (`pgvector`) to find the **Top 3 matching Microsoft Documentation chunks** from an offline dataset of 14,000+ files.
-4. **Auto-Resolve Evaluation** — Llama-3 evaluates the problem natively strictly against these 3 official Microsoft Docs. If it finds an explicit, step-by-step solution, it dynamically generates an Instant Fix email.
-5. **Route & Create** — An Azure DevOps **Issue** work item is created. The extracted job field is mapped against a CSV directory to identify the correct Azure DevOps assignee. (If the RAG AI resolved it, the step-by-step solution is also appended to this ticket's Description logs!)
+3. **Agentic RAG Orchestrator** — The C# worker passes the problem to a Python-based **LangGraph Agentic Orchestrator**. The Agent evaluates the request and autonomously decides which tools to invoke.
+4. **Tool Execution (MCP & PGVector)** — For internal technical issues, the Agent uses the `search_internal_knowledge_base` tool to perform a 384D vector similarity search against PostgreSQL (`pgvector`). For official training or certifications, it uses the `search_microsoft_training_catalog` tool, communicating via the **Model Context Protocol (MCP)** to fetch live data from the Microsoft Learn API securely via Entra ID App-Only access.
+5. **Route & Create** — Based on the retrieved data, the Agent synthesizes a final JSON `RagVerdict`. An Azure DevOps **Issue** work item is created. The extracted job field is mapped against a CSV directory to identify the correct Azure DevOps assignee. (If the RAG AI resolved it, the step-by-step solution and reference URLs are also appended to this ticket's logs!)
 6. **Notify** — A professional HTML auto-reply (with QR code) is sent out to the user. If auto-resolved, this email contains a massive green highlighted box with the exact solution and Microsoft URLs. Concurrently, a separate Custom Notification email is dispatched to the IT Assignee to alert them of the ticket.
 7. **Teams Alert** — An **Adaptive Card** is immediately fired to the correct Microsoft Teams channel (mapped per job field via Power Automate Webhooks), displaying ticket details, priority, status, and a direct ADO link — color-coded 🟢 green for RAG-resolved or 🟠 orange for human-assigned tickets.
 8. **Track & Sync** — Every ticket and state transition is comprehensively persisted to PostgreSQL. A standalone vanilla web dashboard queries this DB periodically to display real-time pipeline stats and track Azure DevOps board state changes over time.
@@ -68,8 +73,10 @@ flowchart LR
 | Feature | Description |
 |---|---|
 | 🤖 **AI Email Analysis** | Groq LLM extracts problem, severity, department, and resolution estimate |
-| 🧠 **Local RAG Vector Engine** | Offline, quota-free vector similarity search using PostgreSQL `pgvector` |
-| ⚡ **AI Auto-Resolution** | Instantly solves level-1 issues by citing official knowledge base documents |
+| 🧠 **Agentic RAG Orchestrator** | LangGraph-powered intelligent routing that autonomously selects knowledge tools |
+| 🔌 **Model Context Protocol (MCP)** | Custom MCP Server bridging the Groq LLM securely to live Microsoft REST APIs |
+| 🗄️ **Local Vector Engine** | Offline, quota-free vector similarity search using PostgreSQL `pgvector` |
+| ⚡ **AI Auto-Resolution** | Instantly solves level-1 issues by citing official docs and live MS Learn modules |
 | 📋 **Auto Work Item Creation** | Creates Azure DevOps Issues with priority, assignee, and metadata |
 | 🔀 **Intelligent Routing** | CSV-based job field → assignee mapping with fallback defaults |
 | 🔗 **Client Validation Workflow** | Generates dynamic REST callbacks allowing clients to accept or reject AI resolutions |
@@ -86,6 +93,7 @@ flowchart LR
 ## 🛠️ Tech Stack
 
 - **Runtime**: .NET 10.0 (Web SDK) + Python 3 (Virtual Environment)
+- **Agentic Framework**: LangChain / LangGraph + Model Context Protocol (MCP) SDK
 - **Vector Search Engine**: `sentence-transformers` (`all-MiniLM-L6-v2`) + Python `requests`
 - **Email Integration**: Microsoft Graph SDK v5
 - **Teams Integration**: Power Automate Webhooks (Adaptive Cards v1.4 via `HttpClient`)
@@ -263,6 +271,12 @@ PFE/
 ### Phase 13 — Dashboard & Monitoring
 - [x] **Live Dashboard SPA** — Vanilla HTML/CSS/JS static frontend served via Kestrel (`UseStaticFiles()` + `MapFallbackToFile("index.html")`)
 - [x] **Dashboard REST API** — `GET /api/tickets` (latest 50) and `GET /api/stats` (total/processed/failed counts) endpoints with CORS support
+
+### Phase 14 — Agentic RAG Architecture Upgrade
+- [x] **LangGraph Orchestrator** — Replaced linear C# vector search with a Python-based `create_react_agent` LLM orchestrator capable of multi-tool reasoning and routing.
+- [x] **Model Context Protocol (MCP)** — Built `learn_catalog_mcp.py` to securely expose Entra ID-authenticated Microsoft APIs to the LLM via standard `stdio`.
+- [x] **Microsoft Learn API Integration** — Implemented intelligent keyword scoring to query live MS Learn modules, paths, and certifications.
+- [x] **Context/Credential Injection** — Passed `.NET User Secrets` dynamically into the Python process environment to ensure secure, `.env`-free execution.
 
 ### 🔜 Upcoming
 - [ ] **Advanced Email Handling** — Email thread support (ConversationId tracking), inline images, and large attachments

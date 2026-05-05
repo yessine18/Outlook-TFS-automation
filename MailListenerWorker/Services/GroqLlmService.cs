@@ -189,123 +189,67 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
     {
         try
         {
-            _logger.LogInformation("Starting RAG Evaluation for description...");
+            _logger.LogInformation("Starting Agentic RAG Orchestrator for description...");
             
-            // 1. Run Python to get the vector array string
             var pythonPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\.venv\Scripts\python.exe";
-            var scriptPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\src\embed\query_vector.py";
+            var scriptPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\src\agent\orchestrator.py";
+            
+            // Clean the input to prevent command line injection
+            var safeDescription = detailedDescription.Replace("\"", "\\\"").Replace("\n", " ");
             
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = pythonPath,
-                Arguments = $"\"{scriptPath}\" \"{detailedDescription.Replace("\"", "\\\"").Replace("\n", " ")}\"",
+                Arguments = $"\"{scriptPath}\" \"{safeDescription}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
+            // Inject secrets from .NET Configuration directly into the Python process
+            processStartInfo.EnvironmentVariables["ENTRA_TENANT_ID"] = _configuration["AzureAd:TenantId"];
+            processStartInfo.EnvironmentVariables["ENTRA_CLIENT_ID"] = _configuration["AzureAd:ClientId"];
+            processStartInfo.EnvironmentVariables["ENTRA_CLIENT_SECRET"] = _configuration["AzureAd:ClientSecret"];
+            processStartInfo.EnvironmentVariables["GROQ_API_KEY"] = _configuration["Groq:ApiKey"];
+
             using var process = Process.Start(processStartInfo);
             if (process == null) throw new Exception("Failed to start python process");
             
-            var vectorJsonStr = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            // Read stdout and stderr concurrently to prevent buffer deadlocks
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            
+            await Task.WhenAll(stdoutTask, stderrTask);
             await process.WaitForExitAsync(cancellationToken);
+            
+            var agentJsonOutput = stdoutTask.Result;
+            var error = stderrTask.Result;
             
             if (process.ExitCode != 0)
             {
-                var error = await process.StandardError.ReadToEndAsync(cancellationToken);
-                _logger.LogWarning("Python vector script failed: {Error}", error);
+                _logger.LogWarning("Python Orchestrator script failed: {Error}", error);
                 return CreateDefaultRagVerdict();
             }
 
-            // 2. Search PostgreSQL database for the top 3 chunks
-            var connectionString = _configuration.GetConnectionString("DefaultConnection") 
-                ?? "Host=localhost;Port=5432;Database=helpdesk_pipeline;Username=postgres;Password=secret";
-                
-            var docsList = new List<object>();
-            
-            using (var conn = new NpgsqlConnection(connectionString))
+            if (string.IsNullOrWhiteSpace(agentJsonOutput))
             {
-                await conn.OpenAsync(cancellationToken);
-                using var cmd = new NpgsqlCommand(@"
-                    SELECT document_url, document_title, chunk_text, 1 - (embedding <=> @emb::vector) AS similarity 
-                    FROM microsoft_docs 
-                    ORDER BY embedding <=> @emb::vector 
-                    LIMIT 3;", conn);
-                    
-                cmd.Parameters.AddWithValue("emb", vectorJsonStr.Trim());
-                
-                using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-                while (await reader.ReadAsync(cancellationToken))
-                {
-                    docsList.Add(new {
-                        Url = reader.GetString(0),
-                        Title = reader.GetString(1),
-                        Chunk = reader.GetString(2),
-                        Similarity = reader.GetDouble(3)
-                    });
-                }
-            }
-
-            // 3. Send final payload to Groq to make the Auto-Resolve decision!
-            var docsJsonString = JsonSerializer.Serialize(docsList);
-            
-            var prompt = $$"""
-            You are a Level-3 AI Helpdesk Agent.
-
-            USER'S PROBLEM DESCRIPTION:
-            {{detailedDescription}}
-
-            OFFICIAL MICROSOFT KNOWLEDGE BASE:
-            {{docsJsonString}}
-
-            Analyze the Problem against the Knowledge Base chunks.
-            Does the Knowledge base provide a verified, explicit solution to the problem?
-
-            Respond in STRICT JSON FORMAT:
-            {
-              "hasSolution": true/false,
-              "confidenceScore": float <0.0-1.0>,
-              "proposedSolution": "Clear steps or explanation to solve the user's issue based strictly on the docs. N/A if none.",
-              "referenceUrls": ["url1", "url2"]
-            }
-            """;
-
-            var client = _httpClientFactory.CreateClient();
-            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
-
-            var requestBody = new
-            {
-                model = _model,
-                messages = new[] { new { role = "user", content = prompt } },
-                temperature = 0.1,
-                response_format = new { type = "json_object" }
-            };
-
-            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-            var response = await client.PostAsync(_apiUrl, content, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Groq API error for RAG Verdict");
+                _logger.LogWarning("Empty response from Python Orchestrator");
                 return CreateDefaultRagVerdict();
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var jsonDoc = JsonDocument.Parse(responseContent);
-            var messageContent = jsonDoc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
-            
-            if (string.IsNullOrEmpty(messageContent)) return CreateDefaultRagVerdict();
+            _logger.LogDebug("Agentic RAG Output: {Output}", agentJsonOutput);
             
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var verdict = JsonSerializer.Deserialize<RagVerdict>(messageContent, options);
+            var verdict = JsonSerializer.Deserialize<RagVerdict>(agentJsonOutput.Trim(), options);
             
-            _logger.LogInformation("RAG Complete -> HasSolution: {HasSolution}, Confidence: {Confidence}", verdict?.HasSolution, verdict?.ConfidenceScore);
+            _logger.LogInformation("Agentic RAG Complete -> HasSolution: {HasSolution}, ToolUsed: {ToolUsed}, Confidence: {Confidence}\nSolution: {ProposedSolution}", 
+                verdict?.HasSolution, verdict?.ToolUsed, verdict?.ConfidenceScore, verdict?.ProposedSolution);
             return verdict ?? CreateDefaultRagVerdict();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing RAG Pipeline Verdict");
+            _logger.LogError(ex, "Error processing Agentic RAG Pipeline Verdict");
             return CreateDefaultRagVerdict();
         }
     }

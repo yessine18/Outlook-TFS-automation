@@ -10,5 +10,7 @@ public class RagVerdict
     
     public string ProposedSolution { get; set; } = string.Empty;
     
+    public string ToolUsed { get; set; } = string.Empty;
+    
     public List<string> ReferenceUrls { get; set; } = new();
 }
