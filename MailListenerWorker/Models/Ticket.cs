@@ -19,6 +19,12 @@ public class Ticket
     /// </summary>
     public string MessageId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The MS Graph ConversationId — shared across all emails in the same thread.
+    /// Used to detect follow-up replies and prevent duplicate ticket creation.
+    /// </summary>
+    public string? ConversationId { get; set; }
+
     // ───────────────────────── Email Metadata ──────────────────
 
     /// <summary>The sender's email address.</summary>

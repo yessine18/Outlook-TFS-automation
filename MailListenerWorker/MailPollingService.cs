@@ -113,7 +113,7 @@ public class MailPollingService : BackgroundService
                 {
                     config.QueryParameters.Filter = "isRead eq false";
                     config.QueryParameters.Top = 10;
-                    config.QueryParameters.Select = ["id", "subject", "from", "receivedDateTime", "bodyPreview", "isRead"];
+                    config.QueryParameters.Select = ["id", "subject", "from", "receivedDateTime", "bodyPreview", "isRead", "conversationId", "hasAttachments"];
                 }, cancellationToken);
 
             if (messages?.Value is null) return;
@@ -205,7 +205,23 @@ public class MailPollingService : BackgroundService
 
                             if (!string.IsNullOrEmpty(email))
                             {
+                                // Look up the original MessageId so we can reply in the same thread
+                                string? originalMessageId = null;
+                                try
+                                {
+                                    using var replyScope = _scopeFactory.CreateScope();
+                                    var replyDb = replyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                                    var dbTicket = await replyDb.Tickets.FirstOrDefaultAsync(
+                                        t => t.AdoWorkItemId == item.Id, cancellationToken);
+                                    originalMessageId = dbTicket?.MessageId;
+                                }
+                                catch (Exception dbEx)
+                                {
+                                    _logger.LogWarning(dbEx, "Could not retrieve MessageId for WorkItem #{Id}. Will send as new email.", item.Id);
+                                }
+
                                 await SendAutoReplyAsync(
+                                    originalMessageId,
                                     email,
                                     string.IsNullOrEmpty(name) ? "User" : name,
                                     title,
@@ -248,12 +264,14 @@ public class MailPollingService : BackgroundService
     {
         var senderEmail = msg.From?.EmailAddress?.Address;
         var senderName = msg.From?.EmailAddress?.Name ?? senderEmail ?? "Unknown";
+        var conversationId = msg.ConversationId;
 
         _logger.LogInformation(
-            "New email - Subject: {Subject}, From: {From}, Received: {ReceivedAt}",
+            "New email - Subject: {Subject}, From: {From}, Received: {ReceivedAt}, ConversationId: {ConvId}",
             msg.Subject,
             senderEmail,
-            msg.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss"));
+            msg.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+            conversationId);
         if (senderEmail != null && _allowedDomains.Any(domain => senderEmail.EndsWith(domain, StringComparison.OrdinalIgnoreCase)))
         {
             _logger.LogInformation("Email from allowed domain {SenderEmail}. Processing...", senderEmail);
@@ -274,6 +292,78 @@ public class MailPollingService : BackgroundService
             }, cancellationToken);
 
         var emailBody = fullMessage?.Body?.Content ?? msg.BodyPreview ?? "No content";
+
+        // ═══════════════════════════════════════════════════════════════
+        // THREAD DETECTION — Check if this email belongs to an existing ticket
+        // ═══════════════════════════════════════════════════════════════
+        if (!string.IsNullOrEmpty(conversationId))
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var existingTicket = await db.Tickets.FirstOrDefaultAsync(
+                    t => t.ConversationId == conversationId, cancellationToken);
+
+                if (existingTicket != null && existingTicket.AdoWorkItemId.HasValue)
+                {
+                    _logger.LogInformation(
+                        "🔗 Thread reply detected! ConversationId {ConvId} matches existing Ticket {TicketId} (ADO #{AdoId})",
+                        conversationId, existingTicket.TicketId, existingTicket.AdoWorkItemId);
+
+                    // Use LLM to summarize the follow-up reply
+                    var summary = await _llmService.SummarizeFollowUpAsync(emailBody, cancellationToken);
+                    _logger.LogInformation("📝 LLM Follow-up Summary: {Summary}", summary);
+
+                    // Append as a styled HTML comment to the ADO Work Item
+                    var commentHtml = $"<div style='border-left: 4px solid #3b82f6; padding: 12px; margin: 8px 0; background: #eff6ff;'>" +
+                                      $"<strong>📧 Follow-up from {System.Web.HttpUtility.HtmlEncode(senderName)} ({System.Web.HttpUtility.HtmlEncode(senderEmail)})" +
+                                      $" — {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC</strong><br/><br/>" +
+                                      $"{System.Web.HttpUtility.HtmlEncode(summary)}</div>";
+
+                    await _adoService.AddWorkItemCommentAsync(
+                        existingTicket.AdoWorkItemId.Value, commentHtml, cancellationToken);
+
+                    // Fetch and attach any new attachments from the follow-up
+                    await HandleAttachmentsAsync(msg.Id!, existingTicket.AdoWorkItemId.Value, null, cancellationToken);
+
+                    // Send acknowledgment reply to the client (stays in the same thread)
+                    var ackHtml = $@"
+                        <div style='font-family: Segoe UI, Arial, sans-serif; padding: 20px;'>
+                            <p>Hi <strong>{System.Web.HttpUtility.HtmlEncode(senderName)}</strong>,</p>
+                            <p>Thank you for your follow-up. Your additional information has been received and appended to your existing ticket 
+                            <strong>#{existingTicket.AdoWorkItemId}</strong>.</p>
+                            <p>Our support team is actively working on your case and will get back to you as soon as possible.</p>
+                            <hr style='border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;'/>
+                            <p style='font-size: 12px; color: #6b7280;'>This is an automated acknowledgment. Please do not reply to this email if your issue has already been resolved.</p>
+                        </div>";
+
+                    await _graphClient
+                        .Users[_mailboxUser]
+                        .Messages[msg.Id]
+                        .Reply
+                        .PostAsync(new Microsoft.Graph.Users.Item.Messages.Item.Reply.ReplyPostRequestBody
+                        {
+                            Message = new Message
+                            {
+                                Body = new ItemBody { ContentType = BodyType.Html, Content = ackHtml }
+                            },
+                            Comment = ""
+                        }, cancellationToken: cancellationToken);
+
+                    _logger.LogInformation("📩 Acknowledgment reply sent to {Email} for follow-up on ADO #{AdoId}", senderEmail, existingTicket.AdoWorkItemId);
+
+                    await MarkAsReadAsync(msg.Id!, cancellationToken);
+                    _logger.LogInformation("✅ Follow-up appended to ADO #{AdoId}. No duplicate ticket created.", existingTicket.AdoWorkItemId);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "⚠️ Thread detection failed for ConversationId {ConvId}. Proceeding with new ticket creation.", conversationId);
+            }
+        }
+
         var workItemId = 0;
         var initialState = "To Do";
         var assigneeEmail = _defaultAssignee;
@@ -349,6 +439,7 @@ public class MailPollingService : BackgroundService
             {
                 TicketId = ticketId,
                 MessageId = msg.Id ?? "Unknown",
+                ConversationId = conversationId,
                 SenderEmail = senderEmail ?? "Unknown",
                 Subject = msg.Subject ?? "No Subject",
                 BodyExcerpt = emailBody.Length > 4000 ? emailBody[..3997] + "..." : emailBody,
@@ -456,6 +547,12 @@ public class MailPollingService : BackgroundService
                     _logger.LogInformation("✅ Ticket {TicketId} updated with ADO WorkItem #{WorkItemId}.", ticketId, workItemId);
                 }
             }
+
+            // Handle attachments (inline images + file attachments)
+            if (workItemId > 0)
+            {
+                await HandleAttachmentsAsync(msg.Id!, workItemId, null, cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -496,10 +593,11 @@ public class MailPollingService : BackgroundService
         // ═══════════════════════════════════════════════════════════════
         try
         {
-            // Auto-reply to original sender
+            // Auto-reply to original sender (using .Reply to stay in the same thread)
             if (!string.IsNullOrEmpty(senderEmail) && workItemId > 0)
             {
                 await SendAutoReplyAsync(
+                    msg.Id!,
                     senderEmail,
                     senderName ?? "Unknown",
                     msg.Subject,
@@ -576,6 +674,67 @@ public class MailPollingService : BackgroundService
         _logger.LogInformation("✅ Full pipeline complete for email: {Subject} (Ticket: {TicketId}, ADO: #{WorkItemId})", msg.Subject, ticketId, workItemId);
     }
 
+    /// <summary>
+    /// Fetches email attachments via Microsoft Graph and handles them:
+    /// - Inline images: Embeds as base64 in an ADO comment for visibility
+    /// - File attachments: Uploads to ADO Work Item as linked attachments
+    /// </summary>
+    private async Task HandleAttachmentsAsync(string messageId, int workItemId, System.Text.StringBuilder? descBuilder, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var attachments = await _graphClient
+                .Users[_mailboxUser]
+                .Messages[messageId]
+                .Attachments
+                .GetAsync(cancellationToken: cancellationToken);
+
+            if (attachments?.Value is null || attachments.Value.Count == 0) return;
+
+            _logger.LogInformation("📎 Found {Count} attachment(s) for message {MessageId}", attachments.Value.Count, messageId);
+
+            foreach (var attachment in attachments.Value)
+            {
+                if (attachment is Microsoft.Graph.Models.FileAttachment fileAttachment && fileAttachment.ContentBytes != null)
+                {
+                    var fileName = fileAttachment.Name ?? "attachment";
+                    var contentType = fileAttachment.ContentType ?? "application/octet-stream";
+                    var sizeKb = fileAttachment.ContentBytes.Length / 1024.0;
+
+                    // Skip oversized attachments (> 4MB) to prevent ADO storage issues
+                    if (fileAttachment.ContentBytes.Length > 4 * 1024 * 1024)
+                    {
+                        _logger.LogWarning("⚠️ Skipping oversized attachment '{FileName}' ({SizeKb:F0} KB)", fileName, sizeKb);
+                        continue;
+                    }
+
+                    if (fileAttachment.IsInline == true && contentType.StartsWith("image/"))
+                    {
+                        // Inline image → Append as base64 HTML comment to ADO
+                        var base64 = Convert.ToBase64String(fileAttachment.ContentBytes);
+                        var imgHtml = $"<div style='margin: 8px 0; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;'>" +
+                                      $"<strong>📷 Inline Image: {System.Web.HttpUtility.HtmlEncode(fileName)}</strong><br/>" +
+                                      $"<img src='data:{contentType};base64,{base64}' style='max-width: 600px; margin-top: 8px;' alt='{System.Web.HttpUtility.HtmlEncode(fileName)}'/>" +
+                                      $"</div>";
+
+                        await _adoService.AddWorkItemCommentAsync(workItemId, imgHtml, cancellationToken);
+                        _logger.LogInformation("🖼️ Inline image '{FileName}' ({SizeKb:F0} KB) embedded in ADO #{WorkItemId}", fileName, sizeKb, workItemId);
+                    }
+                    else
+                    {
+                        // File attachment → Upload to ADO
+                        await _adoService.UploadAttachmentAsync(workItemId, fileName, fileAttachment.ContentBytes, cancellationToken);
+                        _logger.LogInformation("📄 File '{FileName}' ({SizeKb:F0} KB) uploaded to ADO #{WorkItemId}", fileName, sizeKb, workItemId);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "⚠️ Error handling attachments for message {MessageId}. Pipeline continues.", messageId);
+        }
+    }
+
     private async Task MarkAsReadAsync(string messageId, CancellationToken cancellationToken)
     {
         await _graphClient
@@ -587,6 +746,7 @@ public class MailPollingService : BackgroundService
     }
 
     private async Task SendAutoReplyAsync(
+        string? originalMessageId,
         string recipientEmail,
         string recipientName,
         string? originalSubject,
@@ -766,13 +926,31 @@ public class MailPollingService : BackgroundService
 
         var replyMessage = new Message
         {
-            Subject = $"Re: {subject} [TKT-{ticketId}]",
             Body = new ItemBody
             {
                 ContentType = BodyType.Html,
                 Content = htmlContent
-            },
-            ToRecipients =
+            }
+        };
+
+        // Use .Reply if we have the original message ID (keeps same thread),
+        // otherwise fall back to SendMail for state-change notifications
+        if (!string.IsNullOrEmpty(originalMessageId))
+        {
+            await _graphClient
+                .Users[_mailboxUser]
+                .Messages[originalMessageId]
+                .Reply
+                .PostAsync(new Microsoft.Graph.Users.Item.Messages.Item.Reply.ReplyPostRequestBody
+                {
+                    Message = replyMessage,
+                    Comment = ""
+                }, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            replyMessage.Subject = $"Re: {subject} [TKT-{ticketId}]";
+            replyMessage.ToRecipients =
             [
                 new Recipient
                 {
@@ -782,17 +960,17 @@ public class MailPollingService : BackgroundService
                         Name = recipientName
                     }
                 }
-            ]
-        };
+            ];
 
-        await _graphClient
-            .Users[_mailboxUser]
-            .SendMail
-            .PostAsync(new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody
-            {
-                Message = replyMessage,
-                SaveToSentItems = true
-            }, cancellationToken: cancellationToken);
+            await _graphClient
+                .Users[_mailboxUser]
+                .SendMail
+                .PostAsync(new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody
+                {
+                    Message = replyMessage,
+                    SaveToSentItems = true
+                }, cancellationToken: cancellationToken);
+        }
     }
 
     private async Task SendAssigneeNotificationAsync(

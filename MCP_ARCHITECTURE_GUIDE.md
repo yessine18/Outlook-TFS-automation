@@ -27,30 +27,28 @@ The AI workflow operates via a sophisticated "Agentic" loop. Instead of forcing 
 Here is the exact step-by-step workflow:
 
 1. **Trigger**: The C# Worker receives an IT support email and spawns the Python `orchestrator.py` process.
-2. **Orchestrator Bootup**: The Orchestrator initializes the Groq LLM and registers two specific tools:
-   - Tool A: `search_internal_knowledge_base` (Queries our local PostgreSQL PGVector database).
-   - Tool B: `search_microsoft_training_catalog` (Connects to our custom MCP Server via standard input/output).
-3. **Agentic Reasoning**: The Orchestrator passes the IT issue to the LLM. The LLM reads the issue and autonomously decides: *"Do I need to search the internal KB, the Microsoft Catalog, or both?"*
-4. **MCP Execution**: If it chooses the Microsoft Catalog, the Orchestrator sends an MCP request to `learn_catalog_mcp.py`.
-5. **Data Retrieval**: The MCP server authenticates with Microsoft Entra ID, fetches the live data from the Microsoft API, filters it by relevance, and returns the JSON payload back to the Orchestrator.
-6. **Final Synthesis**: The LLM reads the tool outputs, synthesizes an exact step-by-step solution, and outputs a strict `RagVerdict` JSON object back to the C# Worker.
+2. **Orchestrator Bootup**: The Orchestrator initializes the Groq LLM and registers **three** specific tools:
+   - **Tool A:** `search_internal_knowledge_base` (Queries our local PostgreSQL PGVector database, simulating an internal company KB).
+   - **Tool B:** `search_official_microsoft_documentation` (Connects to Microsoft's official MCP Server for live, up-to-date public documentation).
+   - **Tool C:** `search_microsoft_training_catalog` (Connects to our custom MCP Server via standard input/output for exams/certifications).
+3. **Agentic Reasoning**: The Orchestrator passes the IT issue to the LLM. The LLM reads the issue and autonomously decides which tool is the most appropriate for the task.
+4. **Tool Execution**: The Orchestrator executes the chosen tool(s) and retrieves the data.
+5. **Final Synthesis**: The LLM reads the tool outputs, synthesizes an exact step-by-step solution, and outputs a strict `RagVerdict` JSON object back to the C# Worker.
 
 ---
 
 ## 3. Deep Dive into the Code Components
 
-### Component A: `learn_catalog_mcp.py` (The MCP Server)
-This is a standalone Python script acting as the **Data Broker**.
-- **Security First**: It securely loads the Entra ID (`Tenant ID`, `Client ID`, `Client Secret`) credentials passed by the C# application.
-- **MSAL Authentication**: It uses the Microsoft Authentication Library (MSAL) to acquire an App-Only access token for the `https://learn.microsoft.com/.default` scope.
-- **Tool Definition**: It uses the `FastMCP` framework to expose a single tool: `search_microsoft_training_catalog`.
-- **Intelligent Filtering**: Because the Microsoft API returns massive lists of data, this script includes a custom "search engine" algorithm. It splits the AI's query into keywords, drops filler words, scores every Microsoft module by relevance, and returns only the top 5 most relevant items to save LLM context window space.
-
-### Component B: `orchestrator.py` (The Brain)
+### Component A: `orchestrator.py` (The Brain)
 This script is the **Agentic Coordinator** built using LangGraph/LangChain.
-- **Tool Binding**: It uses `create_react_agent` to bind the PGVector tool and the MCP tool to the LLM. 
+- **Tool Binding**: It uses `create_react_agent` to bind the three tools to the LLM.
+- **The HTTP Wrapper Hack**: Because Microsoft's official MCP server currently throws a `405 Method Not Allowed` when accessed using the standard Anthropic Python MCP Client, we wrote a custom HTTP POST wrapper in `orchestrator.py`. This wrapper bypasses the error by directly hitting their JSON-RPC endpoint and parsing the Server-Sent Events (SSE) stream perfectly.
 - **Strict Guardrails**: It contains a rigid System Prompt that explicitly forbids the LLM from hallucinating answers. If the tools return no data or throw an error, the Orchestrator forces the LLM to output `HasSolution: false` and logs the exact error message.
-- **JSON Contract**: It acts as the ultimate bridge to C#, ensuring the final output is always a perfectly formatted `RagVerdict` JSON string that the .NET backend can deserialize without crashing.
+
+### Component B: `learn_catalog_mcp.py` (The Custom MCP Server)
+This is a standalone Python script acting as the **Data Broker** for certifications and training.
+- **Security First**: It securely loads the Entra ID credentials passed by the C# application.
+- **Intelligent Filtering**: Because the Microsoft API returns massive lists of data, this script splits the AI's query into keywords, scores every Microsoft module by relevance, and returns only the top 5 most relevant items.
 
 ### Component C: `agent_poc.py` (The Proof of Concept)
 **Is this file necessary? No.**

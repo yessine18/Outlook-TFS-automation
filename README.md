@@ -9,9 +9,9 @@
   <img src="https://img.shields.io/badge/HuggingFace-FFD21E?logo=huggingface&logoColor=black" alt="HuggingFace">
 </p>
 
-# 📧 Outlook → Azure DevOps Automation (with RAG Auto-Resolve)
+# 📧 Outlook → Azure DevOps Automation (with Agentic RAG Auto-Resolve)
 
-A **.NET Worker Service** that transforms incoming support emails into fully tracked Azure DevOps work items — powered by AI-driven analysis, intelligent routing, real-time state synchronization, and a custom **Retrieval-Augmented Generation (RAG)** engine for instantaneous ticket resolution.
+A **.NET Worker Service** that transforms incoming support emails into fully tracked Azure DevOps work items — powered by AI-driven analysis, intelligent routing, real-time state synchronization, a custom **Agentic RAG** engine for instantaneous ticket resolution, and **conversation-aware thread tracking** that prevents duplicate tickets and keeps all communication within a single Outlook thread.
 
 ---
 
@@ -28,6 +28,7 @@ flowchart LR
         %% Agent Tools
         D <-->|Tool: pgvector_kb| E["🗄️ PostgreSQL (Internal Docs)"]
         D <-->|Tool: ms_learn_mcp| F["🔌 Learn Catalog MCP Server"]
+        D <-->|Tool: ms_official_mcp| F4["🌐 Live Microsoft MCP Server"]
         F <-->|REST API| F2["🌐 Microsoft Learn Platform"]
         
         D -->|JSON RagVerdict| F3["⚡ Final AI Verdict"]
@@ -58,13 +59,18 @@ flowchart LR
 
 1. **Poll** — The worker service natively monitors a shared support Outlook mailbox every 60 seconds via the Microsoft Graph API.
 2. **Analyze** — Each new email is sent to **Groq LLM** (LLaMA 3.3 70B) which safely extracts the abstract metadata: core problem, severity, estimated resolution time, and the relevant IT Job Field.
-3. **Agentic RAG Orchestrator** — The C# worker passes the problem to a Python-based **LangGraph Agentic Orchestrator**. The Agent evaluates the request and autonomously decides which tools to invoke.
-4. **Tool Execution (MCP & PGVector)** — For internal technical issues, the Agent uses the `search_internal_knowledge_base` tool to perform a 384D vector similarity search against PostgreSQL (`pgvector`). For official training or certifications, it uses the `search_microsoft_training_catalog` tool, communicating via the **Model Context Protocol (MCP)** to fetch live data from the Microsoft Learn API securely via Entra ID App-Only access.
+3. **Agentic RAG Orchestrator** — The C# worker passes the problem to a Python-based **LangGraph Agentic Orchestrator**. The Agent evaluates the request and autonomously decides which of its three tools to invoke.
+4. **Three-Tool Execution** — The Orchestrator routes the problem to:
+   - **Internal KB**: Performs a 384D vector search against PostgreSQL (`pgvector`) for simulated internal tech support.
+   - **Live Microsoft MCP**: A custom HTTP wrapper that connects to the official Microsoft MCP Server to fetch real-time, up-to-date Microsoft documentation.
+   - **Custom Catalog MCP**: Communicates via standard MCP to fetch official Microsoft trainings, learning paths, and exams via Entra ID App-Only access.
 5. **Route & Create** — Based on the retrieved data, the Agent synthesizes a final JSON `RagVerdict`. An Azure DevOps **Issue** work item is created. The extracted job field is mapped against a CSV directory to identify the correct Azure DevOps assignee. (If the RAG AI resolved it, the step-by-step solution and reference URLs are also appended to this ticket's logs!)
-6. **Notify** — A professional HTML auto-reply (with QR code) is sent out to the user. If auto-resolved, this email contains a massive green highlighted box with the exact solution and Microsoft URLs. Concurrently, a separate Custom Notification email is dispatched to the IT Assignee to alert them of the ticket.
-7. **Teams Alert** — An **Adaptive Card** is immediately fired to the correct Microsoft Teams channel (mapped per job field via Power Automate Webhooks), displaying ticket details, priority, status, and a direct ADO link — color-coded 🟢 green for RAG-resolved or 🟠 orange for human-assigned tickets.
-8. **Track & Sync** — Every ticket and state transition is comprehensively persisted to PostgreSQL. A standalone vanilla web dashboard queries this DB periodically to display real-time pipeline stats and track Azure DevOps board state changes over time.
-9. **Interactive Feedback** — When a ticket is marked as Done/Closed in ADO, the worker syncs the state and sends a closure email containing an **Outlook Actionable Message (Adaptive Card)**. Clients can rate the support directly inside Outlook, instantly logging their feedback to the PostgreSQL database and appending a beautiful HTML summary to the Azure DevOps Work Item discussion.
+6. **Notify** — A professional HTML auto-reply is sent using Microsoft Graph's `.Reply` endpoint, ensuring the response stays **inside the same Outlook email thread**. If auto-resolved, this email contains a massive green highlighted box with the exact solution and Microsoft URLs. Concurrently, a separate Custom Notification email is dispatched to the IT Assignee to alert them of the ticket.
+7. **Attach** — Any **inline images** (screenshots) and **file attachments** (PDFs, logs) are automatically extracted from the email via Graph API and uploaded directly to the ADO Work Item.
+8. **Teams Alert** — An **Adaptive Card** is immediately fired to the correct Microsoft Teams channel (mapped per job field via Power Automate Webhooks), displaying ticket details, priority, status, and a direct ADO link — color-coded 🟢 green for RAG-resolved or 🟠 orange for human-assigned tickets.
+9. **Track & Sync** — Every ticket and state transition is comprehensively persisted to PostgreSQL. State-change notifications (e.g., "Done") are sent as **replies in the original thread** by looking up the stored `MessageId`. A standalone vanilla web dashboard queries this DB periodically to display real-time pipeline stats.
+10. **Thread Detection** — When a client **replies** to the bot's email with additional context, the system detects the shared `ConversationId`, uses the **LLM to summarize** the follow-up (e.g., *"The client reported that the issue persists after rebooting..."*), and appends it as a styled comment to the existing ADO Work Item — **no duplicate ticket created**.
+11. **Interactive Feedback** — When a ticket is marked as Done/Closed in ADO, the worker syncs the state and sends a closure email containing an **Outlook Actionable Message (Adaptive Card)**. Clients can rate the support directly inside Outlook, instantly logging their feedback to the PostgreSQL database and appending a beautiful HTML summary to the Azure DevOps Work Item discussion.
 
 ---
 
@@ -81,9 +87,11 @@ flowchart LR
 | 🔀 **Intelligent Routing** | CSV-based job field → assignee mapping with fallback defaults |
 | 🔗 **Client Validation Workflow** | Generates dynamic REST callbacks allowing clients to accept or reject AI resolutions |
 | 💬 **Microsoft Teams Alerts** | Fires Adaptive Cards to the correct Teams channel via Power Automate Webhooks, color-coded by RAG outcome |
-| 📬 **Auto-Reply Emails** | Professional HTML emails with ticket reference, QR codes, interactive buttons, and AI solutions |
+| 📬 **Threaded Auto-Reply Emails** | Professional HTML emails sent via `.Reply` to stay in the same Outlook conversation thread |
+| 📎 **Attachment Handling** | Inline images embedded in ADO comments; file attachments uploaded and linked to Work Items |
+| 🔗 **ConversationId Thread Tracking** | Detects follow-up replies and appends LLM-summarized comments instead of creating duplicates |
 | 👤 **Assignee Notifications** | Dedicated email notifications to the assigned team member |
-| 🔄 **State Sync** | Polls ADO board and sends status update emails on human state changes |
+| 🔄 **State Sync** | Polls ADO board and sends status update emails as replies in the original thread |
 | 🗄️ **Full Audit Trail** | PostgreSQL database tracks every ticket and state transition |
 | ⭐ **Outlook Actionable Messages** | In-email Adaptive Card feedback forms synced directly to Azure DevOps history |
 | 🛡️ **Graceful Fallback** | If the AI is unsure, the ticket safely generates as normal for a human agent |
@@ -278,7 +286,15 @@ PFE/
 - [x] **Microsoft Learn API Integration** — Implemented intelligent keyword scoring to query live MS Learn modules, paths, and certifications.
 - [x] **Context/Credential Injection** — Passed `.NET User Secrets` dynamically into the Python process environment to ensure secure, `.env`-free execution.
 
+### Phase 15 — Advanced Email Handling
+- [x] **ConversationId Thread Tracking** — Store MS Graph `ConversationId` on every ticket with a database index. Follow-up replies to the same thread are detected and matched to existing tickets, preventing duplicate Work Item creation.
+- [x] **Thread-Aware `.Reply` Endpoint** — Switched auto-replies from `SendMail` (isolated emails) to `Messages[id].Reply`, ensuring all bot communications remain in the client's original Outlook conversation thread.
+- [x] **LLM Follow-Up Summarization** — When a thread reply is detected, the Groq LLM generates a concise, human-readable summary (e.g., *"The client reported that..."*) which is appended as a styled HTML comment to the ADO Work Item.
+- [x] **State-Change Thread Replies** — State-change notifications (To Do → Done) now look up the original `MessageId` from PostgreSQL and reply in the same thread, instead of sending isolated emails.
+- [x] **Inline Image Extraction** — Screenshots embedded inline in emails are fetched via Graph API, converted to base64, and embedded as HTML comments in the ADO Work Item for engineer visibility.
+- [x] **File Attachment Upload** — PDFs, logs, and other file attachments are uploaded to ADO attachment storage via `CreateAttachmentAsync()` and linked to the Work Item with a 4MB size cap.
+- [x] **Follow-Up Acknowledgment** — Clients receive an automatic acknowledgment reply confirming their follow-up was received and appended to their existing ticket.
+
 ### 🔜 Upcoming
-- [ ] **Advanced Email Handling** — Email thread support (ConversationId tracking), inline images, and large attachments
 - [ ] **CI/CD Pipeline** — Azure DevOps pipeline for automated build, test, and deployment
 - [ ] **Production Deployment** — Docker containerization and Azure cloud deployment (App Service / Container Instance + PostgreSQL Flexible Server + Key Vault)

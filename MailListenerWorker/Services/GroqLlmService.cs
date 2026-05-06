@@ -255,4 +255,67 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
     }
 
     private static RagVerdict CreateDefaultRagVerdict() => new() { HasSolution = false, ConfidenceScore = 0.0, ProposedSolution = "Error in RAG Pipeline" };
+
+    /// <summary>
+    /// Uses the LLM to generate a concise, human-readable summary of a follow-up email reply.
+    /// This summary is appended as an ADO Work Item comment instead of creating a duplicate ticket.
+    /// </summary>
+    public async Task<string> SummarizeFollowUpAsync(string emailBody, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var truncatedBody = emailBody.Length > 4000 ? emailBody[..4000] : emailBody;
+
+            var prompt = $"""
+You are a helpdesk assistant. A client has replied to an existing support ticket with additional information.
+Summarize their reply in 2-3 concise sentences that a support engineer can quickly read.
+Start your summary with "The client" (e.g., "The client reported that...", "The client provided additional details...", "The client confirmed that...").
+Do NOT include any greeting, sign-off, or formatting. Just the plain summary text.
+
+Client's follow-up email:
+{truncatedBody}
+""";
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
+
+            var requestBody = new
+            {
+                model = _model,
+                messages = new[] { new { role = "user", content = prompt } },
+                temperature = 0.3,
+                max_tokens = 300
+            };
+
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestBody),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync(_apiUrl, content, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("LLM follow-up summarization failed: {StatusCode}", response.StatusCode);
+                return "The client sent a follow-up reply. Please review the original email thread for details.";
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var jsonDoc = JsonDocument.Parse(responseContent);
+            var summary = jsonDoc.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString();
+
+            return string.IsNullOrWhiteSpace(summary)
+                ? "The client sent a follow-up reply. Please review the original email thread for details."
+                : summary.Trim();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error summarizing follow-up email");
+            return "The client sent a follow-up reply. Please review the original email thread for details.";
+        }
+    }
 }

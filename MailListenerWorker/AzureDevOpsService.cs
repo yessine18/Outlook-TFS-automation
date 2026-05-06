@@ -396,4 +396,55 @@ public class AzureDevOpsService
             _logger.LogError(ex, "Error adding comment to work item #{WorkItemId}", workItemId);
         }
     }
+
+    /// <summary>
+    /// Uploads a file attachment to Azure DevOps storage and links it to the specified work item.
+    /// </summary>
+    public async Task UploadAttachmentAsync(int workItemId, string fileName, byte[] content, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Step 1: Upload the binary content to ADO attachment storage
+            using var stream = new System.IO.MemoryStream(content);
+            var attachmentRef = await _witClient.CreateAttachmentAsync(
+                stream,
+                _projectName,
+                fileName: fileName,
+                cancellationToken: cancellationToken);
+
+            if (attachmentRef?.Url == null)
+            {
+                _logger.LogWarning("Failed to upload attachment '{FileName}' to ADO storage.", fileName);
+                return;
+            }
+
+            // Step 2: Link the uploaded attachment to the work item
+            var patchDocument = new JsonPatchDocument
+            {
+                new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/relations/-",
+                    Value = new
+                    {
+                        rel = "AttachedFile",
+                        url = attachmentRef.Url,
+                        attributes = new { comment = $"Auto-attached from email: {fileName}" }
+                    }
+                }
+            };
+
+            await _witClient.UpdateWorkItemAsync(
+                patchDocument,
+                workItemId,
+                validateOnly: false,
+                cancellationToken: cancellationToken);
+
+            _logger.LogInformation("📎 Attachment '{FileName}' linked to WorkItem #{WorkItemId}", fileName, workItemId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading attachment '{FileName}' to WorkItem #{WorkItemId}", fileName, workItemId);
+        }
+    }
 }

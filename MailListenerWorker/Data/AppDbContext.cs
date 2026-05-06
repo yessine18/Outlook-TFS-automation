@@ -50,6 +50,13 @@ public class AppDbContext : DbContext
                   .IsUnique()
                   .HasDatabaseName("IX_Tickets_MessageId");
 
+            // ── ConversationId – indexed for thread lookups ──────
+            entity.Property(t => t.ConversationId)
+                  .HasMaxLength(512);
+
+            entity.HasIndex(t => t.ConversationId)
+                  .HasDatabaseName("IX_Tickets_ConversationId");
+
             // ── Email metadata ───────────────────────────────────
             entity.Property(t => t.SenderEmail)
                   .IsRequired()
