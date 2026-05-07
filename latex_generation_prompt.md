@@ -1,11 +1,3 @@
-# LaTeX Report Generation Prompt
-
-Send this prompt along with the `PFE_Report_Outline_Updated.md` file inside the project directory. The LLM will have access to the full codebase.
-
----
-
-## PROMPT START
-
 You are an academic technical writer tasked with generating the **full LaTeX content** of a PFE (Projet de Fin d'Études) engineering thesis report. I will provide you with a detailed outline containing every chapter, section, subsection, and bullet point. Your job is to **expand each item into professionally written, publication-ready LaTeX content**.
 
 ### CRITICAL FIRST STEP — EXPLORE THE CODEBASE
@@ -175,5 +167,3 @@ Table~\ref{tab:tech_comparison} presents a comparative analysis of the candidate
 7. **Generate a complete bibliography** at the end with all cited sources.
 
 ### OUTLINE IS ATTACHED BELOW — EXPAND EVERY ITEM INTO FULL LATEX CONTENT.
-
-## PROMPT END
