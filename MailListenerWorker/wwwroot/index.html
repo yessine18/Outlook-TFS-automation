@@ -3,79 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PFE Helpdesk | Automation Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="description" content="Helpdesk Automation Dashboard — Real-time AI-powered email processing pipeline by Inetum">
+    <title>Helpdesk Automation Dashboard | Inetum</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <div class="blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
-    </div>
+    <!-- ═══════════ HEADER ═══════════ -->
+    <header class="header" role="banner">
+        <div class="header-container">
+            <div class="header-left">
+                <img src="https://i.imgur.com/244yi9K.jpeg" alt="Inetum Logo" class="logo" loading="lazy">
+                <div class="header-title">
+                    <h1>Helpdesk Automation</h1>
+                    <p class="tagline">Let's Make Tech Right</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="status-indicator" aria-live="polite" aria-label="System status">
+                    <span class="status-dot" id="status-dot"></span>
+                    <span class="status-text" id="status-text">Online</span>
+                </div>
+                <time class="current-time" id="current-time" aria-label="Current time">00:00:00</time>
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">🌙</button>
+            </div>
+        </div>
+    </header>
 
-    <div class="container">
-        <header>
-            <div class="logo-area">
-                <i class="fa-solid fa-bolt-lightning main-logo"></i>
-                <h1>Helpdesk <span>Pipeline</span></h1>
-            </div>
-            <div class="status-indicator">
-                <span class="pulse"></span> Live Monitoring
-            </div>
-        </header>
+    <main class="main-content">
+        <!-- ═══════════ TABS ═══════════ -->
+        <nav class="tab-navigation" role="tablist" aria-label="Dashboard sections">
+            <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="pipeline-tab" data-tab="pipeline">
+                <span class="tab-icon">📊</span>
+                <span class="tab-label">Pipeline Orchestrator</span>
+            </button>
+            <button class="tab-btn" role="tab" aria-selected="false" aria-controls="metrics-tab" data-tab="metrics">
+                <span class="tab-icon">📈</span>
+                <span class="tab-label">Metrics Dashboard</span>
+            </button>
+        </nav>
 
-        <section class="stats-grid">
-            <div class="stat-card">
-                <i class="fa-solid fa-inbox"></i>
-                <div class="stat-info">
-                    <p class="stat-label">Total Emails</p>
-                    <h2 id="total-tickets">--</h2>
-                </div>
+        <!-- ═══════════ TAB 1: PIPELINE ═══════════ -->
+        <section id="pipeline-tab" role="tabpanel" class="tab-content active">
+            <div class="pipeline-controls">
+                <button class="btn btn-primary" id="refresh-btn" aria-label="Refresh data">
+                    <span class="btn-icon" id="refresh-icon">🔄</span>
+                    <span class="btn-text">Refresh</span>
+                </button>
+                <label class="toggle-switch" aria-label="Pause auto-refresh">
+                    <input type="checkbox" id="pause-toggle">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">Pause Auto-Refresh</span>
+                </label>
             </div>
-            <div class="stat-card">
-                <i class="fa-solid fa-check-double"></i>
-                <div class="stat-info">
-                    <p class="stat-label">Processed (ADO)</p>
-                    <h2 id="processed-count">--</h2>
+
+            <section aria-label="Email processing pipeline stages">
+                <h2 class="section-title">Email Processing Pipeline</h2>
+                <div class="pipeline-stages">
+                    <div class="stage" data-stage="inbox">
+                        <div class="stage-icon inbox-grad">📨</div>
+                        <h3 class="stage-title">Inbox</h3>
+                        <div class="stage-counter"><span class="counter-value" id="stage-inbox">0</span></div>
+                        <p class="stage-subtitle">Raw emails</p>
+                    </div>
+                    <div class="pipeline-arrow"><svg viewBox="0 0 40 20"><line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/><polygon points="35,10 30,7 30,13" fill="currentColor"/></svg></div>
+                    <div class="stage" data-stage="llm">
+                        <div class="stage-icon llm-grad">🧠</div>
+                        <h3 class="stage-title">LLM Analysis</h3>
+                        <div class="stage-counter"><span class="counter-value" id="stage-llm">0</span></div>
+                        <p class="stage-subtitle">AI extraction</p>
+                    </div>
+                    <div class="pipeline-arrow"><svg viewBox="0 0 40 20"><line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/><polygon points="35,10 30,7 30,13" fill="currentColor"/></svg></div>
+                    <div class="stage" data-stage="routing">
+                        <div class="stage-icon routing-grad">📍</div>
+                        <h3 class="stage-title">Intelligent Routing</h3>
+                        <div class="stage-counter"><span class="counter-value" id="stage-routing">0</span></div>
+                        <p class="stage-subtitle">Mapping assignees</p>
+                    </div>
+                    <div class="pipeline-arrow"><svg viewBox="0 0 40 20"><line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/><polygon points="35,10 30,7 30,13" fill="currentColor"/></svg></div>
+                    <div class="stage" data-stage="rag">
+                        <div class="stage-icon rag-grad">💡</div>
+                        <h3 class="stage-title">RAG Evaluation</h3>
+                        <div class="stage-counter"><span class="counter-value" id="stage-rag">0</span></div>
+                        <p class="stage-subtitle">Knowledge search</p>
+                    </div>
+                    <div class="pipeline-arrow"><svg viewBox="0 0 40 20"><line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/><polygon points="35,10 30,7 30,13" fill="currentColor"/></svg></div>
+                    <div class="stage" data-stage="devops">
+                        <div class="stage-icon devops-grad">📋</div>
+                        <h3 class="stage-title">Azure DevOps</h3>
+                        <div class="stage-counter"><span class="counter-value" id="stage-devops">0</span></div>
+                        <p class="stage-subtitle">Work items</p>
+                    </div>
+                    <div class="pipeline-arrow"><svg viewBox="0 0 40 20"><line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/><polygon points="35,10 30,7 30,13" fill="currentColor"/></svg></div>
+                    <div class="stage" data-stage="completed">
+                        <div class="stage-icon completed-grad">✅</div>
+                        <h3 class="stage-title">Completed</h3>
+                        <div class="stage-counter"><span class="counter-value" id="stage-completed">0</span></div>
+                        <p class="stage-subtitle">Processed</p>
+                    </div>
                 </div>
-            </div>
-            <div class="stat-card">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <div class="stat-info">
-                    <p class="stat-label">Failures</p>
-                    <h2 id="failed-count">--</h2>
-                </div>
-            </div>
+            </section>
+
+            <section class="queue-section" aria-label="Active email processing queue">
+                <h2 class="section-title">Active Queue</h2>
+                <div class="queue-container" id="queue-container"></div>
+            </section>
         </section>
 
-        <section class="tickets-section">
-            <div class="table-header">
-                <h2>Recent Pipeline Operations</h2>
-                <button id="refresh-btn" class="btn-refresh"><i class="fa-solid fa-rotate"></i> Refresh</button>
-            </div>
-            <div class="table-container shadow-vibrant">
-                <table id="tickets-table">
-                    <thead>
-                        <tr>
-                            <th>Received At</th>
-                            <th>Subject</th>
-                            <th>Sender</th>
-                            <th>Department</th>
-                            <th>ADO Item</th>
-                            <th>ADO State</th>
-                            <th>Pipeline</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tickets-body">
-                        <!-- Rows will be injected here via JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </div>
+        <!-- ═══════════ TAB 2: METRICS ═══════════ -->
+        <section id="metrics-tab" role="tabpanel" class="tab-content">
+            <section class="metrics-section" aria-label="Core performance metrics">
+                <h2 class="section-title">Core Metrics</h2>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><div class="kpi-icon blue-grad">📧</div><div class="kpi-content"><p class="kpi-label">Total Processed</p><p class="kpi-value"><span class="kpi-number" id="kpi-total">0</span></p><p class="kpi-change positive" id="kpi-total-change">↑ +12% this week</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon orange-grad">⏳</div><div class="kpi-content"><p class="kpi-label">In Queue</p><p class="kpi-value"><span class="kpi-number" id="kpi-queue">0</span></p><p class="kpi-change">Avg wait: 2.3 min</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon green-grad">%</div><div class="kpi-content"><p class="kpi-label">Success Rate</p><p class="kpi-value"><span class="kpi-number" id="kpi-success">0</span>%</p><div class="progress-bar"><div class="progress-fill" id="success-bar" style="width:0%"></div></div><p class="kpi-change positive">↑ +3.1% this week</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon purple-grad">⏱️</div><div class="kpi-content"><p class="kpi-label">Avg Processing Time</p><p class="kpi-value"><span class="kpi-number" id="kpi-avgtime">0</span>s</p><p class="kpi-change">Per email</p></div></div>
+                </div>
+            </section>
 
-    <script src="app.js"></script>
+            <section class="metrics-section" aria-label="Advanced system metrics">
+                <h2 class="section-title">Advanced Metrics</h2>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><div class="kpi-icon yellow-grad">💡</div><div class="kpi-content"><p class="kpi-label">AI Auto-Resolved</p><p class="kpi-value"><span class="kpi-number" id="kpi-resolved">0</span></p><p class="kpi-change" id="kpi-resolved-pct">27% of total</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon red-grad">⚠️</div><div class="kpi-content"><p class="kpi-label">Failed Tickets</p><p class="kpi-value"><span class="kpi-number" id="kpi-failed">0</span></p><p class="kpi-change danger" id="kpi-failed-pct">5.8% of total</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon uptime-grad">❤️</div><div class="kpi-content"><p class="kpi-label">System Uptime</p><p class="kpi-value"><span class="kpi-number" id="kpi-uptime">99.9</span>%</p><p class="kpi-change">Healthy</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon cyan-grad">➡️</div><div class="kpi-content"><p class="kpi-label">API Response Time</p><p class="kpi-value"><span class="kpi-number" id="kpi-api">145</span>ms</p><p class="kpi-change">Average</p></div></div>
+                </div>
+            </section>
+
+            <section class="metrics-section charts-grid" aria-label="Performance trend charts">
+                <div class="chart-container"><h3>Processing Trend (24h)</h3><canvas id="trend-chart"></canvas></div>
+                <div class="chart-container"><h3>Department Distribution</h3><canvas id="dept-chart"></canvas></div>
+            </section>
+
+            <section class="metrics-section" aria-label="Error rate analysis">
+                <h2 class="section-title">Error Analysis</h2>
+                <div class="error-grid">
+                    <div class="error-card"><div class="error-step">LLM Analysis</div><div class="error-rate rate-good" id="err-llm">2.1%</div><div class="error-details" id="err-llm-d">(26 failures)</div></div>
+                    <div class="error-card"><div class="error-step">DB Persistence</div><div class="error-rate rate-good" id="err-db">0.8%</div><div class="error-details" id="err-db-d">(10 failures)</div></div>
+                    <div class="error-card"><div class="error-step">ADO Creation</div><div class="error-rate rate-good" id="err-ado">1.9%</div><div class="error-details" id="err-ado-d">(24 failures)</div></div>
+                    <div class="error-card"><div class="error-step">Email Sending</div><div class="error-rate rate-good" id="err-mail">0.3%</div><div class="error-details" id="err-mail-d">(4 failures)</div></div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <!-- ═══════════ DETAIL PANEL ═══════════ -->
+    <div class="detail-overlay" id="detail-overlay"></div>
+    <aside class="detail-panel" id="detail-panel" role="complementary" aria-label="Ticket details">
+        <button class="close-btn" id="close-detail" aria-label="Close details panel">✕</button>
+        <div class="detail-content" id="detail-content"></div>
+    </aside>
+
+    <!-- ═══════════ FOOTER ═══════════ -->
+    <footer class="footer" role="contentinfo">
+        <div class="footer-content">
+            <img src="https://i.imgur.com/mwLOpeI.png" alt="Inetum Footer Logo" class="footer-logo" loading="lazy">
+            <p class="footer-text">Helpdesk Automation System © 2025 | Let's Make Tech Right</p>
+        </div>
+    </footer>
+
+    <script src="dashboard.js"></script>
 </body>
 </html>

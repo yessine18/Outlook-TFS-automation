@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Helpdesk Automation Dashboard - Real-time email processing pipeline">
+    <title>Helpdesk Automation Dashboard | Inetum</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header sticky" role="banner">
+        <div class="header-container">
+            <div class="header-left">
+                <img src="https://i.imgur.com/244yi9K.jpeg" alt="Inetum Logo" class="logo" loading="lazy">
+                <div class="header-title">
+                    <h1>Helpdesk Automation</h1>
+                    <p class="tagline">Let's Make Tech Right</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="status-indicator" aria-live="polite" aria-label="System status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Online</span>
+                </div>
+                <time class="current-time" id="current-time" aria-label="Current time">00:00:00</time>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Tab Navigation -->
+        <nav class="tab-navigation" role="tablist" aria-label="Dashboard sections">
+            <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="pipeline-tab" data-tab="pipeline">
+                <span class="tab-icon">📊</span>
+                <span class="tab-label">Pipeline Orchestrator</span>
+            </button>
+            <button class="tab-btn" role="tab" aria-selected="false" aria-controls="metrics-tab" data-tab="metrics">
+                <span class="tab-icon">📈</span>
+                <span class="tab-label">Metrics Dashboard</span>
+            </button>
+        </nav>
+
+        <!-- TAB 1: Pipeline Orchestrator -->
+        <section id="pipeline-tab" role="tabpanel" class="tab-content active">
+            <div class="container">
+                <!-- Pipeline Controls -->
+                <div class="pipeline-controls">
+                    <button class="btn btn-primary" id="refresh-btn" aria-label="Refresh data">
+                        <span class="btn-icon">🔄</span>
+                        <span class="btn-text">Refresh</span>
+                    </button>
+                    <label class="toggle-switch" aria-label="Pause auto-refresh">
+                        <input type="checkbox" id="pause-toggle" aria-label="Pause auto-refresh toggle">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Pause Auto-Refresh</span>
+                    </label>
+                </div>
+
+                <!-- Pipeline Stages -->
+                <section class="pipeline-section" aria-label="Email processing pipeline stages">
+                    <h2>Email Processing Pipeline</h2>
+                    <div class="pipeline-stages">
+                        <!-- Stage 1: Inbox -->
+                        <div class="stage" data-stage="inbox">
+                            <div class="stage-icon inbox-gradient" aria-label="Inbox stage">
+                                <span>📨</span>
+                            </div>
+                            <h3 class="stage-title">Inbox</h3>
+                            <div class="stage-counter" aria-label="Number of emails in inbox">
+                                <span class="counter-value" data-value="145">0</span>
+                            </div>
+                            <p class="stage-subtitle">Raw emails</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="pipeline-arrow">
+                            <svg viewBox="0 0 40 20" aria-hidden="true">
+                                <line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/>
+                                <polygon points="35,10 30,7 30,13" fill="currentColor"/>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 2: LLM Analysis -->
+                        <div class="stage" data-stage="llm">
+                            <div class="stage-icon llm-gradient" aria-label="LLM Analysis stage">
+                                <span>🧠</span>
+                            </div>
+                            <h3 class="stage-title">LLM Analysis</h3>
+                            <div class="stage-counter" aria-label="Number of emails being analyzed">
+                                <span class="counter-value" data-value="42">0</span>
+                            </div>
+                            <p class="stage-subtitle">AI extraction</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="pipeline-arrow">
+                            <svg viewBox="0 0 40 20" aria-hidden="true">
+                                <line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/>
+                                <polygon points="35,10 30,7 30,13" fill="currentColor"/>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 3: Intelligent Routing -->
+                        <div class="stage" data-stage="routing">
+                            <div class="stage-icon routing-gradient" aria-label="Intelligent Routing stage">
+                                <span>📍</span>
+                            </div>
+                            <h3 class="stage-title">Intelligent Routing</h3>
+                            <div class="stage-counter" aria-label="Number of emails being routed">
+                                <span class="counter-value" data-value="28">0</span>
+                            </div>
+                            <p class="stage-subtitle">Mapping assignees</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="pipeline-arrow">
+                            <svg viewBox="0 0 40 20" aria-hidden="true">
+                                <line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/>
+                                <polygon points="35,10 30,7 30,13" fill="currentColor"/>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 4: RAG Evaluation -->
+                        <div class="stage" data-stage="rag">
+                            <div class="stage-icon rag-gradient" aria-label="RAG Evaluation stage">
+                                <span>💡</span>
+                            </div>
+                            <h3 class="stage-title">RAG Evaluation</h3>
+                            <div class="stage-counter" aria-label="Number of emails being evaluated">
+                                <span class="counter-value" data-value="18">0</span>
+                            </div>
+                            <p class="stage-subtitle">Knowledge search</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="pipeline-arrow">
+                            <svg viewBox="0 0 40 20" aria-hidden="true">
+                                <line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/>
+                                <polygon points="35,10 30,7 30,13" fill="currentColor"/>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 5: Azure DevOps -->
+                        <div class="stage" data-stage="devops">
+                            <div class="stage-icon devops-gradient" aria-label="Azure DevOps stage">
+                                <span>📋</span>
+                            </div>
+                            <h3 class="stage-title">Azure DevOps</h3>
+                            <div class="stage-counter" aria-label="Number of work items being created">
+                                <span class="counter-value" data-value="12">0</span>
+                            </div>
+                            <p class="stage-subtitle">Work items</p>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="pipeline-arrow">
+                            <svg viewBox="0 0 40 20" aria-hidden="true">
+                                <line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2"/>
+                                <polygon points="35,10 30,7 30,13" fill="currentColor"/>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 6: Completed -->
+                        <div class="stage" data-stage="completed">
+                            <div class="stage-icon completed-gradient" aria-label="Completed stage">
+                                <span>✅</span>
+                            </div>
+                            <h3 class="stage-title">Completed</h3>
+                            <div class="stage-counter" aria-label="Number of completed emails">
+                                <span class="counter-value" data-value="1247">0</span>
+                            </div>
+                            <p class="stage-subtitle">Processed</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Active Queue -->
+                <section class="queue-section" aria-label="Active email processing queue">
+                    <h2>Active Queue</h2>
+                    <div class="queue-container" id="queue-container">
+                        <!-- Queue cards populated by JavaScript -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Ticket Detail Panel -->
+            <aside class="detail-panel" id="detail-panel" role="complementary" aria-label="Ticket details">
+                <button class="close-btn" aria-label="Close details panel">✕</button>
+                <div class="detail-content">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </aside>
+        </section>
+
+        <!-- TAB 2: Metrics Dashboard -->
+        <section id="metrics-tab" role="tabpanel" class="tab-content">
+            <div class="container">
+                <!-- Core KPI Cards -->
+                <section class="metrics-section" aria-label="Core performance metrics">
+                    <h2>Core Metrics</h2>
+                    <div class="kpi-grid">
+                        <!-- Total Processed -->
+                        <div class="kpi-card" aria-label="Total emails processed">
+                            <div class="kpi-icon blue-gradient">
+                                <span>📧</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">Total Processed</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="1247">0</span></p>
+                                <p class="kpi-change positive">↑ +12% this week</p>
+                            </div>
+                        </div>
+
+                        <!-- In Queue -->
+                        <div class="kpi-card" aria-label="Emails currently in queue">
+                            <div class="kpi-icon orange-gradient">
+                                <span>⏱️</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">In Queue</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="8">0</span></p>
+                                <p class="kpi-change">Avg wait: 2.3 min</p>
+                            </div>
+                        </div>
+
+                        <!-- Success Rate -->
+                        <div class="kpi-card" aria-label="System success rate">
+                            <div class="kpi-icon green-gradient">
+                                <span>%</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">Success Rate</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="94.2">0</span>%</p>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 94.2%"></div>
+                                </div>
+                                <p class="kpi-change positive">↑ +3.1% this week</p>
+                            </div>
+                        </div>
+
+                        <!-- Avg Processing Time -->
+                        <div class="kpi-card" aria-label="Average processing time per email">
+                            <div class="kpi-icon purple-gradient">
+                                <span>⏱️</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">Avg Processing Time</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="2.3">0</span>s</p>
+                                <p class="kpi-change">Per email</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Advanced Metrics -->
+                <section class="metrics-section" aria-label="Advanced system metrics">
+                    <h2>Advanced Metrics</h2>
+                    <div class="kpi-grid">
+                        <!-- AI Auto-Resolved -->
+                        <div class="kpi-card" aria-label="Emails auto-resolved by AI">
+                            <div class="kpi-icon yellow-gradient dark-text">
+                                <span>💡</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">AI Auto-Resolved</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="342">0</span></p>
+                                <p class="kpi-change">27% of total</p>
+                            </div>
+                        </div>
+
+                        <!-- Failed Tickets -->
+                        <div class="kpi-card" aria-label="Failed tickets">
+                            <div class="kpi-icon red-gradient">
+                                <span>⚠️</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">Failed Tickets</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="72">0</span></p>
+                                <p class="kpi-change danger">5.8% of total</p>
+                            </div>
+                        </div>
+
+                        <!-- System Uptime -->
+                        <div class="kpi-card" aria-label="System uptime percentage">
+                            <div class="kpi-icon uptime-gradient">
+                                <span>❤️</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">System Uptime</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="99.9">0</span>%</p>
+                                <p class="kpi-change">Healthy</p>
+                            </div>
+                        </div>
+
+                        <!-- API Response Time -->
+                        <div class="kpi-card" aria-label="Average API response time">
+                            <div class="kpi-icon cyan-gradient">
+                                <span>➡️</span>
+                            </div>
+                            <div class="kpi-content">
+                                <p class="kpi-label">API Response Time</p>
+                                <p class="kpi-value"><span class="kpi-number" data-value="145">0</span>ms</p>
+                                <p class="kpi-change">Average</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Charts Section -->
+                <section class="metrics-section charts-grid" aria-label="Performance trend charts">
+                    <!-- Processing Trend Chart -->
+                    <div class="chart-container">
+                        <h3>Processing Trend (24h)</h3>
+                        <canvas id="trend-chart" role="img" aria-label="Email processing trend over last 24 hours"></canvas>
+                    </div>
+
+                    <!-- Department Distribution Chart -->
+                    <div class="chart-container">
+                        <h3>Department Distribution</h3>
+                        <canvas id="dept-chart" role="img" aria-label="Workload distribution by department"></canvas>
+                    </div>
+                </section>
+
+                <!-- Error Analysis -->
+                <section class="metrics-section" aria-label="Error rate analysis">
+                    <h2>Error Analysis</h2>
+                    <div class="error-grid">
+                        <!-- LLM Analysis -->
+                        <div class="error-card" aria-label="LLM Analysis error rate">
+                            <div class="error-step">LLM Analysis</div>
+                            <div class="error-rate success-rate">2.1%</div>
+                            <div class="error-details">(26 failures)</div>
+                        </div>
+
+                        <!-- DB Persistence -->
+                        <div class="error-card" aria-label="Database persistence error rate">
+                            <div class="error-step">DB Persistence</div>
+                            <div class="error-rate success-rate">0.8%</div>
+                            <div class="error-details">(10 failures)</div>
+                        </div>
+
+                        <!-- ADO Creation -->
+                        <div class="error-card" aria-label="Azure DevOps creation error rate">
+                            <div class="error-step">ADO Creation</div>
+                            <div class="error-rate success-rate">1.9%</div>
+                            <div class="error-details">(24 failures)</div>
+                        </div>
+
+                        <!-- Email Sending -->
+                        <div class="error-card" aria-label="Email sending error rate">
+                            <div class="error-step">Email Sending</div>
+                            <div class="error-rate success-rate">0.3%</div>
+                            <div class="error-details">(4 failures)</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer" role="contentinfo">
+        <div class="footer-content">
+            <img src="https://i.imgur.com/mwLOpeI.png" alt="Inetum Footer Logo" class="footer-logo" loading="lazy">
+            <p class="footer-text">Helpdesk Automation System © 2024 | Let's Make Tech Right</p>
+        </div>
+    </footer>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
