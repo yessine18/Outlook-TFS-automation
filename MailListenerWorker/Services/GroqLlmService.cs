@@ -194,13 +194,18 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
             var pythonPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\.venv\Scripts\python.exe";
             var scriptPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\src\agent\orchestrator.py";
             
-            // Clean the input to prevent command line injection
-            var safeDescription = detailedDescription.Replace("\"", "\\\"").Replace("\n", " ");
+            // Truncate the description to prevent token overflow in the RAG agent
+            var safeDescription = detailedDescription.Length > 4000 
+                ? detailedDescription[..4000] 
+                : detailedDescription;
             
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = pythonPath,
-                Arguments = $"\"{scriptPath}\" \"{safeDescription}\"",
+                // Pass "--stdin" flag; the actual description is piped via stdin
+                // to avoid Windows command-line argument length limits (~32K chars)
+                Arguments = $"\"{scriptPath}\" --stdin",
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -215,6 +220,10 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
 
             using var process = Process.Start(processStartInfo);
             if (process == null) throw new Exception("Failed to start python process");
+            
+            // Write the description to stdin so we don't hit OS arg length limits
+            await process.StandardInput.WriteAsync(safeDescription);
+            process.StandardInput.Close();
             
             // Read stdout and stderr concurrently to prevent buffer deadlocks
             var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);

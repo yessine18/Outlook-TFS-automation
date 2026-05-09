@@ -63,7 +63,9 @@ def search_internal_knowledge_base(query: str) -> str:
             
         results = []
         for row in rows:
-            results.append(f"Title: {row[1]}\nURL: {row[0]}\nContent: {row[2]}")
+            # Truncate each chunk to prevent context window overflow in the ReAct agent
+            chunk = row[2][:1500] if len(row[2]) > 1500 else row[2]
+            results.append(f"Title: {row[1]}\nURL: {row[0]}\nContent: {chunk}")
             
         return "\n\n".join(results)
     except Exception as e:
@@ -197,7 +199,10 @@ Once you have gathered the necessary information from the tools, your final resp
                 print(json.dumps(fallback))
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
+    if "--stdin" in sys.argv:
+        # Read the description from stdin (avoids OS command-line length limits)
+        description = sys.stdin.read().strip()
+    elif len(sys.argv) > 1:
         description = sys.argv[1]
     else:
         description = "I need to configure Azure Active Directory for our new app, and are there any official Microsoft exams for it?"
