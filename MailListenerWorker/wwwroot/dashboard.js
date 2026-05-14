@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    HELPDESK AUTOMATION DASHBOARD — Core Logic
    Connects to /api/stats and /api/tickets on the same host.
+   ALL metrics are sourced from PostgreSQL — zero dummy data.
    ═══════════════════════════════════════════════════════════ */
 (() => {
   'use strict';
@@ -102,6 +103,7 @@
   // ═══════════════ DATA FETCHING ═══════════════
   async function fetchAll(manual = false) {
     if (manual) { refreshIcon.classList.add('spinning'); }
+    const fetchStart = performance.now();
     try {
       const [statsRes, ticketsRes] = await Promise.all([
         fetch(`${API_BASE}/api/stats`),
@@ -110,13 +112,14 @@
       if (!statsRes.ok || !ticketsRes.ok) throw new Error('API error');
       const stats   = await statsRes.json();
       const tickets = await ticketsRes.json();
+      const fetchEnd = performance.now();
       allTickets = tickets;
       setOnline(true);
-      updatePipeline(stats, tickets);
-      updateKpis(stats, tickets);
+      updatePipeline(stats);
+      updateKpis(stats, fetchEnd - fetchStart);
       updateQueue(tickets);
-      updateCharts(tickets);
-      updateErrors(stats, tickets);
+      updateCharts(stats);
+      updateErrors(stats);
     } catch (err) {
       console.warn('Fetch failed:', err);
       setOnline(false);
@@ -137,52 +140,67 @@
   }
 
   // ═══════════════ PIPELINE STAGES ═══════════════
-  function updatePipeline(stats, tickets) {
-    const counts = { inbox: 0, llm: 0, routing: 0, rag: 0, devops: 0, completed: 0 };
-    tickets.forEach(t => {
-      const s = (t.currentPipelineStatus || '').toLowerCase();
-      if (s === 'emailreceived')                                    counts.inbox++;
-      else if (s === 'llmsuccess' || s === 'llmfailed')             counts.llm++;
-      else if (s === 'routedtoassignee')                            counts.routing++;
-      else if (s === 'ragresolved' || s === 'ragfailed')            counts.rag++;
-      else if (s === 'adocreated' || s === 'adofailed')             counts.devops++;
-      else                                                          counts.completed++;
-    });
-    animateNum($('stage-inbox'), counts.inbox);
-    animateNum($('stage-llm'), counts.llm);
-    animateNum($('stage-routing'), counts.routing);
-    animateNum($('stage-rag'), counts.rag);
-    animateNum($('stage-devops'), counts.devops);
-    animateNum($('stage-completed'), counts.completed);
+  // Uses pre-computed counts from the backend (from real PipelineStatus enum values)
+  function updatePipeline(stats) {
+    const p = stats.pipeline;
+
+    // Inbox = EmailReceived
+    animateNum($('stage-inbox'), p.inbox);
+
+    // LLM Analysis = LlmProcessing + LlmSuccess + LlmFailed
+    animateNum($('stage-llm'), p.llmProcessing + p.llmSuccess + p.llmFailed);
+
+    // Intelligent Routing = AdoCreating (between LLM success and ADO creation)
+    animateNum($('stage-routing'), p.adoCreating);
+
+    // RAG Evaluation = PendingClientValidation (AI found a solution, waiting for client)
+    animateNum($('stage-rag'), p.pendingValidation);
+
+    // Azure DevOps = AdoCreated + AdoFailed (tickets sitting in ADO board)
+    animateNum($('stage-devops'), p.adoCreated + p.adoFailed);
+
+    // Completed = ClientAccepted + ClientRejected + MailFailed (terminal states)
+    animateNum($('stage-completed'), p.clientAccepted + p.clientRejected);
   }
 
   // ═══════════════ KPI CARDS ═══════════════
-  function updateKpis(stats, tickets) {
-    const total     = stats.total || 0;
-    const processed = stats.processed || 0;
-    const failed    = stats.failed || 0;
-    const success   = total > 0 ? ((processed / total) * 100) : 0;
-    const resolved  = tickets.filter(t => {
-      const s = (t.currentPipelineStatus || '').toLowerCase();
-      return s === 'ragresolved' || s === 'clientacceptedresolution';
-    }).length;
-    const inQueue   = tickets.filter(t => {
-      const s = (t.currentPipelineStatus || '').toLowerCase();
-      return s === 'emailreceived' || s === 'llmsuccess';
-    }).length;
+  // ALL values sourced from the /api/stats backend — no hardcoded data
+  function updateKpis(stats, apiResponseMs) {
+    // ── Core Metrics ──────────────────────────────
+    animateNum($('kpi-total'), stats.total);
+    animateNum($('kpi-queue'), stats.inQueue);
+    animateNum($('kpi-success'), stats.successRate);
+    $('success-bar').style.width = stats.successRate + '%';
 
-    animateNum($('kpi-total'), total);
-    animateNum($('kpi-queue'), inQueue);
-    animateNum($('kpi-success'), parseFloat(success.toFixed(1)));
-    animateNum($('kpi-avgtime'), 2.3);
-    animateNum($('kpi-resolved'), resolved);
-    animateNum($('kpi-failed'), failed);
+    // Avg Processing Time (real calculation from ReceivedAt to LastUpdatedAt)
+    animateNum($('kpi-avgtime'), stats.avgProcessingSeconds);
 
-    $('success-bar').style.width = success.toFixed(1) + '%';
-    const failPct = total > 0 ? ((failed / total) * 100).toFixed(1) : 0;
-    const resPct  = total > 0 ? ((resolved / total) * 100).toFixed(0) : 0;
+    // ── Advanced Metrics ──────────────────────────
+    animateNum($('kpi-resolved'), stats.aiAutoResolved);
+    animateNum($('kpi-failed'), stats.failed);
+
+    // Dynamic percentage labels (from real data)
+    $('kpi-resolved-pct').textContent = `${stats.aiResolvedPct}% of total`;
+    const failPct = stats.total > 0 ? ((stats.failed / stats.total) * 100).toFixed(1) : '0.0';
     $('kpi-failed-pct').textContent = `${failPct}% of total`;
-    $('kpi-resolved-pct').textContent = `${resPct}% of total`;
+
+    // System Uptime (calculated from when the page loaded)
+    const uptimeMs = Date.now() - startTime;
+    const uptimeHours = (uptimeMs / 3600000).toFixed(1);
+    const uptimeEl = $('kpi-uptime');
+    if (uptimeEl) uptimeEl.textContent = uptimeHours + 'h';
+
+    // API Response Time (measured from actual fetch)
+    const apiEl = $('kpi-api');
+    if (apiEl) animateNum(apiEl, Math.round(apiResponseMs));
+
+    // Client Rating display
+    if (stats.avgClientRating > 0) {
+      const ratingEl = $('kpi-resolved-pct');
+      if (ratingEl && stats.ratedTicketsCount > 0) {
+        ratingEl.textContent = `${stats.aiResolvedPct}% of total · ⭐ ${stats.avgClientRating}/5 avg`;
+      }
+    }
   }
 
   // ═══════════════ QUEUE CARDS ═══════════════
@@ -206,19 +224,16 @@
   }
 
   // ═══════════════ CHARTS ═══════════════
-  function updateCharts(tickets) {
-    buildTrendChart(tickets);
-    buildDeptChart(tickets);
+  // Uses pre-aggregated data from the backend — no client-side grouping needed
+  function updateCharts(stats) {
+    buildTrendChart(stats);
+    buildDeptChart(stats);
   }
 
-  function buildTrendChart(tickets) {
+  function buildTrendChart(stats) {
     const hours = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
-    const counts = new Array(24).fill(0);
-    tickets.forEach(t => {
-      if (!t.receivedAt) return;
-      const h = new Date(t.receivedAt).getHours();
-      counts[h]++;
-    });
+    // Use pre-computed hourly counts from the backend
+    const counts = stats.hourlyCounts || new Array(24).fill(0);
     const ctx = $('trend-chart').getContext('2d');
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const lineColor = isDark ? '#93A3D0' : '#232D4B';
@@ -254,15 +269,11 @@
     });
   }
 
-  function buildDeptChart(tickets) {
-    const deptMap = {};
-    tickets.forEach(t => {
-      const d = t.extractedDepartment || 'Unclassified';
-      deptMap[d] = (deptMap[d] || 0) + 1;
-    });
-    const sorted = Object.entries(deptMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
-    const labels = sorted.map(e => e[0]);
-    const values = sorted.map(e => e[1]);
+  function buildDeptChart(stats) {
+    // Use pre-aggregated department data from the backend
+    const deptData = stats.departments || [];
+    const labels = deptData.map(d => d.department);
+    const values = deptData.map(d => d.count);
     const ctx = $('dept-chart').getContext('2d');
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     if (deptChart) deptChart.destroy();
@@ -295,22 +306,17 @@
   }
 
   // ═══════════════ ERROR ANALYSIS ═══════════════
-  function updateErrors(stats, tickets) {
+  // Uses pre-computed error breakdown from the backend
+  function updateErrors(stats) {
+    const e = stats.errors;
     const total = stats.total || 1;
-    const failed = stats.failed || 0;
-    // Approximate breakdown
-    const llmFail  = tickets.filter(t => (t.currentPipelineStatus || '').toLowerCase() === 'llmfailed').length;
-    const adoFail  = tickets.filter(t => (t.currentPipelineStatus || '').toLowerCase() === 'adofailed').length;
-    const mailFail = tickets.filter(t => (t.currentPipelineStatus || '').toLowerCase() === 'mailsendingfailed').length;
-    const dbFail   = Math.max(0, failed - llmFail - adoFail - mailFail);
 
-    setError('err-llm',  'err-llm-d',  llmFail, total);
-    setError('err-db',   'err-db-d',   dbFail, total);
-    setError('err-ado',  'err-ado-d',  adoFail, total);
-    setError('err-mail', 'err-mail-d', mailFail, total);
+    setError('err-llm',  'err-llm-d',  e.llmFailed,  e.llmFailPct);
+    setError('err-db',   'err-db-d',   0, 0);   // DB failures don't persist (pipeline aborts before saving)
+    setError('err-ado',  'err-ado-d',  e.adoFailed,  e.adoFailPct);
+    setError('err-mail', 'err-mail-d', e.mailFailed, e.mailFailPct);
   }
-  function setError(rateId, detId, count, total) {
-    const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+  function setError(rateId, detId, count, pct) {
     const el = $(rateId);
     el.textContent = pct + '%';
     el.className = 'error-rate ' + (pct < 3 ? 'rate-good' : pct < 5 ? 'rate-warn' : 'rate-bad');
@@ -354,13 +360,14 @@
   function badgeLabel(t) {
     const s = (t.currentPipelineStatus || '').toLowerCase();
     if (s.includes('failed'))    return 'Failed';
-    if (s.includes('done') || s.includes('closed') || s.includes('accepted')) return 'Done';
+    if (s.includes('accepted') || s.includes('rejected')) return 'Done';
     if (s === 'emailreceived')   return 'Inbox';
+    if (s === 'pendingclientvalidation') return 'AI Resolved';
     return 'Processing';
   }
   function badgeClass(t) {
     const l = badgeLabel(t);
-    return l === 'Failed' ? 'badge-failed' : l === 'Done' ? 'badge-done' : l === 'Inbox' ? 'badge-inbox' : 'badge-processing';
+    return l === 'Failed' ? 'badge-failed' : l === 'Done' ? 'badge-done' : l === 'Inbox' ? 'badge-inbox' : l === 'AI Resolved' ? 'badge-done' : 'badge-processing';
   }
   function cardStatusClass(t) {
     const l = badgeLabel(t);

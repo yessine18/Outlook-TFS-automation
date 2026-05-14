@@ -26,6 +26,9 @@ builder.Services.AddSingleton(sp =>
     return new JobFieldMappingService(logger, csvPath);
 });
 
+// ── Real-Time Pipeline Events (SSE) ────────────────────
+builder.Services.AddSingleton<PipelineEventService>();
+
 // ── Background Worker ───────────────────────────────────
 builder.Services.AddHostedService<MailPollingService>();
 
@@ -50,14 +53,142 @@ app.MapGet("/api/tickets", async (AppDbContext db) =>
         .ToListAsync();
 });
 
-// ── Minimal API: Stats ───────────────────────────────
+// ── Minimal API: Stats (Comprehensive — Real Data) ───
 app.MapGet("/api/stats", async (AppDbContext db) =>
 {
-    var total = await db.Tickets.CountAsync();
-    var processed = await db.Tickets.CountAsync(t => t.AdoWorkItemId != null);
-    var failed = await db.Tickets.CountAsync(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.AdoFailed);
-    
-    return new { Total = total, Processed = processed, Failed = failed };
+    var allTickets = await db.Tickets.ToListAsync();
+    var total = allTickets.Count;
+
+    // ── Pipeline Stage Counts ──────────────────────────
+    var inbox = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.EmailReceived);
+    var llmProcessing = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.LlmProcessing);
+    var llmSuccess = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.LlmSuccess);
+    var llmFailed = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.LlmFailed);
+    var adoCreating = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.AdoCreating);
+    var adoCreated = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.AdoCreated);
+    var adoFailed = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.AdoFailed);
+    var mailFailed = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.MailSendingFailed);
+    var pendingValidation = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.PendingClientValidation);
+    var clientAccepted = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.ClientAcceptedResolution);
+    var clientRejected = allTickets.Count(t => t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.ClientRejectedResolution);
+
+    // ── Derived Metrics ────────────────────────────────
+    var processed = allTickets.Count(t => t.AdoWorkItemId != null);
+    var totalFailed = llmFailed + adoFailed + mailFailed;
+    var aiAutoResolved = pendingValidation + clientAccepted;
+    var successRate = total > 0 ? Math.Round((double)processed / total * 100, 1) : 0.0;
+    var failRate = total > 0 ? Math.Round((double)totalFailed / total * 100, 1) : 0.0;
+    var aiResolvedPct = total > 0 ? Math.Round((double)aiAutoResolved / total * 100, 1) : 0.0;
+
+    // ── In-Queue (tickets not yet fully processed) ─────
+    var inQueue = allTickets.Count(t =>
+        t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.EmailReceived ||
+        t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.LlmProcessing ||
+        t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.LlmSuccess ||
+        t.CurrentPipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.AdoCreating);
+
+    // ── Avg Processing Time (from ReceivedAt to LastUpdatedAt for completed tickets) ──
+    var completedTickets = allTickets.Where(t =>
+        t.AdoWorkItemId != null &&
+        t.CurrentPipelineStatus != MailListenerWorker.Models.Enums.PipelineStatus.EmailReceived &&
+        t.CurrentPipelineStatus != MailListenerWorker.Models.Enums.PipelineStatus.LlmProcessing).ToList();
+
+    // Use TicketStateLogs to compute actual pipeline execution time:
+    // From the FIRST log entry to the FIRST terminal state (AdoCreated/PendingClientValidation)
+    var completedTicketIds = completedTickets.Select(t => t.TicketId).ToList();
+    var relevantLogs = await db.TicketStateLogs
+        .Where(l => completedTicketIds.Contains(l.TicketId))
+        .ToListAsync();
+    var logsByTicket = relevantLogs.GroupBy(l => l.TicketId);
+
+    var processingDurations = new List<double>();
+    foreach (var group in logsByTicket)
+    {
+        var logs = group.OrderBy(l => l.CreatedAt).ToList();
+        var firstLog = logs.FirstOrDefault();
+        var terminalLog = logs.FirstOrDefault(l =>
+            l.PipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.AdoCreated ||
+            l.PipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.PendingClientValidation ||
+            l.PipelineStatus == MailListenerWorker.Models.Enums.PipelineStatus.AdoFailed);
+        if (firstLog != null && terminalLog != null && terminalLog.CreatedAt > firstLog.CreatedAt)
+        {
+            processingDurations.Add((terminalLog.CreatedAt - firstLog.CreatedAt).TotalSeconds);
+        }
+    }
+    var avgProcessingSeconds = processingDurations.Count > 0
+        ? Math.Round(processingDurations.Average(), 1)
+        : 0.0;
+
+    // ── Avg Client Rating ──────────────────────────────
+    var ratedTickets = allTickets.Where(t => t.ClientRating.HasValue && t.ClientRating > 0).ToList();
+    var avgRating = ratedTickets.Count > 0 ? Math.Round(ratedTickets.Average(t => t.ClientRating!.Value), 1) : 0.0;
+
+    // ── Hourly Processing Trend (24h) ──────────────────
+    var hourlyCounts = new int[24];
+    foreach (var t in allTickets)
+    {
+        var localHour = t.ReceivedAt.ToLocalTime().Hour;
+        hourlyCounts[localHour]++;
+    }
+
+    // ── Department Distribution ────────────────────────
+    var departments = allTickets
+        .GroupBy(t => t.ExtractedDepartment ?? "Unclassified")
+        .Select(g => new { Department = g.Key, Count = g.Count() })
+        .OrderByDescending(g => g.Count)
+        .Take(10)
+        .ToList();
+
+    return new
+    {
+        // Core totals
+        Total = total,
+        Processed = processed,
+        Failed = totalFailed,
+        InQueue = inQueue,
+        SuccessRate = successRate,
+        FailRate = failRate,
+
+        // Pipeline stages
+        Pipeline = new
+        {
+            Inbox = inbox,
+            LlmProcessing = llmProcessing,
+            LlmSuccess = llmSuccess,
+            LlmFailed = llmFailed,
+            AdoCreating = adoCreating,
+            AdoCreated = adoCreated,
+            AdoFailed = adoFailed,
+            MailFailed = mailFailed,
+            PendingValidation = pendingValidation,
+            ClientAccepted = clientAccepted,
+            ClientRejected = clientRejected
+        },
+
+        // AI metrics
+        AiAutoResolved = aiAutoResolved,
+        AiResolvedPct = aiResolvedPct,
+
+        // Performance
+        AvgProcessingSeconds = avgProcessingSeconds,
+        AvgClientRating = avgRating,
+        RatedTicketsCount = ratedTickets.Count,
+
+        // Error breakdown
+        Errors = new
+        {
+            LlmFailed = llmFailed,
+            AdoFailed = adoFailed,
+            MailFailed = mailFailed,
+            LlmFailPct = total > 0 ? Math.Round((double)llmFailed / total * 100, 1) : 0.0,
+            AdoFailPct = total > 0 ? Math.Round((double)adoFailed / total * 100, 1) : 0.0,
+            MailFailPct = total > 0 ? Math.Round((double)mailFailed / total * 100, 1) : 0.0
+        },
+
+        // Charts data
+        HourlyCounts = hourlyCounts,
+        Departments = departments
+    };
 });
 
 // ── Minimal API: Validation Endpoint ─────────────────
@@ -163,6 +294,40 @@ app.MapPost("/api/ticket/{id:int}/feedback", async (int id, [Microsoft.AspNetCor
     {
         logger.LogError(ex, "Failed to process feedback for ticket {TicketId}", id);
         return Results.StatusCode(500);
+    }
+});
+
+// ── Minimal API: SSE Real-Time Pipeline Events ───────────
+app.MapGet("/api/events", async (PipelineEventService eventService, HttpContext ctx, CancellationToken ct) =>
+{
+    ctx.Response.ContentType = "text/event-stream";
+    ctx.Response.Headers.Append("Cache-Control", "no-cache");
+    ctx.Response.Headers.Append("Connection", "keep-alive");
+    ctx.Response.Headers.Append("X-Accel-Buffering", "no");
+
+    // Send recent events as initial payload
+    foreach (var evt in eventService.GetRecentEvents())
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(evt);
+        await ctx.Response.WriteAsync($"data: {json}\n\n", ct);
+    }
+    await ctx.Response.Body.FlushAsync(ct);
+
+    // Subscribe to live events
+    var channel = eventService.Subscribe();
+    try
+    {
+        await foreach (var evt in channel.Reader.ReadAllAsync(ct))
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(evt);
+            await ctx.Response.WriteAsync($"data: {json}\n\n", ct);
+            await ctx.Response.Body.FlushAsync(ct);
+        }
+    }
+    catch (OperationCanceledException) { }
+    finally
+    {
+        eventService.Unsubscribe(channel);
     }
 });
 

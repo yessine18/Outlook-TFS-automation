@@ -41,6 +41,10 @@
                 <span class="tab-icon">📈</span>
                 <span class="tab-label">Metrics Dashboard</span>
             </button>
+            <a href="/live.html" class="tab-btn" style="text-decoration:none">
+                <span class="tab-icon" style="animation:pulse 2s infinite">🔴</span>
+                <span class="tab-label">Live Monitor</span>
+            </a>
         </nav>
 
         <!-- ═══════════ TAB 1: PIPELINE ═══════════ -->
@@ -115,9 +119,9 @@
             <section class="metrics-section" aria-label="Core performance metrics">
                 <h2 class="section-title">Core Metrics</h2>
                 <div class="kpi-grid">
-                    <div class="kpi-card"><div class="kpi-icon blue-grad">📧</div><div class="kpi-content"><p class="kpi-label">Total Processed</p><p class="kpi-value"><span class="kpi-number" id="kpi-total">0</span></p><p class="kpi-change positive" id="kpi-total-change">↑ +12% this week</p></div></div>
-                    <div class="kpi-card"><div class="kpi-icon orange-grad">⏳</div><div class="kpi-content"><p class="kpi-label">In Queue</p><p class="kpi-value"><span class="kpi-number" id="kpi-queue">0</span></p><p class="kpi-change">Avg wait: 2.3 min</p></div></div>
-                    <div class="kpi-card"><div class="kpi-icon green-grad">%</div><div class="kpi-content"><p class="kpi-label">Success Rate</p><p class="kpi-value"><span class="kpi-number" id="kpi-success">0</span>%</p><div class="progress-bar"><div class="progress-fill" id="success-bar" style="width:0%"></div></div><p class="kpi-change positive">↑ +3.1% this week</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon blue-grad">📧</div><div class="kpi-content"><p class="kpi-label">Total Processed</p><p class="kpi-value"><span class="kpi-number" id="kpi-total">0</span></p><p class="kpi-change">All time</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon orange-grad">⏳</div><div class="kpi-content"><p class="kpi-label">In Queue</p><p class="kpi-value"><span class="kpi-number" id="kpi-queue">0</span></p><p class="kpi-change">Awaiting processing</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon green-grad">%</div><div class="kpi-content"><p class="kpi-label">Success Rate</p><p class="kpi-value"><span class="kpi-number" id="kpi-success">0</span>%</p><div class="progress-bar"><div class="progress-fill" id="success-bar" style="width:0%"></div></div><p class="kpi-change">Processed / Total</p></div></div>
                     <div class="kpi-card"><div class="kpi-icon purple-grad">⏱️</div><div class="kpi-content"><p class="kpi-label">Avg Processing Time</p><p class="kpi-value"><span class="kpi-number" id="kpi-avgtime">0</span>s</p><p class="kpi-change">Per email</p></div></div>
                 </div>
             </section>
@@ -127,8 +131,8 @@
                 <div class="kpi-grid">
                     <div class="kpi-card"><div class="kpi-icon yellow-grad">💡</div><div class="kpi-content"><p class="kpi-label">AI Auto-Resolved</p><p class="kpi-value"><span class="kpi-number" id="kpi-resolved">0</span></p><p class="kpi-change" id="kpi-resolved-pct">27% of total</p></div></div>
                     <div class="kpi-card"><div class="kpi-icon red-grad">⚠️</div><div class="kpi-content"><p class="kpi-label">Failed Tickets</p><p class="kpi-value"><span class="kpi-number" id="kpi-failed">0</span></p><p class="kpi-change danger" id="kpi-failed-pct">5.8% of total</p></div></div>
-                    <div class="kpi-card"><div class="kpi-icon uptime-grad">❤️</div><div class="kpi-content"><p class="kpi-label">System Uptime</p><p class="kpi-value"><span class="kpi-number" id="kpi-uptime">99.9</span>%</p><p class="kpi-change">Healthy</p></div></div>
-                    <div class="kpi-card"><div class="kpi-icon cyan-grad">➡️</div><div class="kpi-content"><p class="kpi-label">API Response Time</p><p class="kpi-value"><span class="kpi-number" id="kpi-api">145</span>ms</p><p class="kpi-change">Average</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon uptime-grad">❤️</div><div class="kpi-content"><p class="kpi-label">Session Uptime</p><p class="kpi-value"><span class="kpi-number" id="kpi-uptime">0h</span></p><p class="kpi-change">Since page load</p></div></div>
+                    <div class="kpi-card"><div class="kpi-icon cyan-grad">➡️</div><div class="kpi-content"><p class="kpi-label">API Response Time</p><p class="kpi-value"><span class="kpi-number" id="kpi-api">0</span>ms</p><p class="kpi-change">Last measured</p></div></div>
                 </div>
             </section>
 
@@ -164,6 +168,6 @@
         </div>
     </footer>
 
-    <script src="dashboard.js"></script>
+    <script src="dashboard.js?v=2"></script>
 </body>
 </html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Pipeline | Inetum Helpdesk</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f0f4f8;
+            --bg2: #ffffff;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --dim: #64748b;
+            --accent: #3b82f6;
+            --green: #16a34a;
+            --red: #dc2626;
+            --orange: #d97706;
+            --purple: #7c3aed;
+            --cyan: #0891b2;
+            --pink: #db2777;
+            --header-bg: #1a2340;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
+
+        /* ── Header (stays dark for contrast) ── */
+        .header { background:var(--header-bg); padding:16px 32px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(0,0,0,0.1); }
+        .header-left { display:flex; align-items:center; gap:16px; }
+        .header-left img { height:36px; border-radius:8px; }
+        .header-left h1 { font-size:1.25rem; font-weight:700; color:#fff; }
+        .header-left .subtitle { font-size:0.75rem; color:rgba(255,255,255,0.6); }
+        .header-right { display:flex; align-items:center; gap:16px; }
+        .back-link { color:#93c5fd; text-decoration:none; font-size:0.85rem; font-weight:500; padding:8px 16px; border:1px solid rgba(147,197,253,0.3); border-radius:8px; transition:all .2s; }
+        .back-link:hover { background:rgba(147,197,253,0.15); }
+        .live-dot { width:10px; height:10px; background:var(--green); border-radius:50%; animation:pulse-dot 2s infinite; }
+        .live-label { font-size:0.8rem; color:#4ade80; font-weight:600; text-transform:uppercase; letter-spacing:1px; }
+        @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)} 50%{box-shadow:0 0 0 8px rgba(34,197,94,0)} }
+
+        /* ── Pipeline Tracker ── */
+        .pipeline-section { padding:32px; position:relative; z-index:1; }
+        .section-label { font-size:0.7rem; text-transform:uppercase; letter-spacing:2px; color:var(--dim); margin-bottom:16px; font-weight:600; }
+        .pipeline-track { display:flex; align-items:center; justify-content:center; gap:0; padding:28px 24px; background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+        .pipe-stage { display:flex; flex-direction:column; align-items:center; gap:8px; min-width:100px; position:relative; }
+        .pipe-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; background:#f8fafc; border:2px solid var(--border); transition:all .5s cubic-bezier(.4,0,.2,1); position:relative; }
+        .pipe-icon.active { border-color:var(--accent); background:rgba(59,130,246,0.08); box-shadow:0 0 16px rgba(59,130,246,0.2); animation:glow-blue .8s ease-in-out infinite alternate; }
+        .pipe-icon.done { border-color:var(--green); background:rgba(22,163,74,0.08); box-shadow:0 0 12px rgba(22,163,74,0.15); }
+        .pipe-icon.error { border-color:var(--red); background:rgba(220,38,38,0.08); box-shadow:0 0 12px rgba(220,38,38,0.15); }
+        @keyframes glow-blue { to{box-shadow:0 0 24px rgba(59,130,246,0.3)} }
+        .pipe-name { font-size:0.7rem; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; }
+        .pipe-connector { width:40px; height:2px; background:var(--border); position:relative; margin:0 4px; margin-bottom:20px; }
+        .pipe-connector.active { background:linear-gradient(90deg,var(--accent),var(--green)); box-shadow:0 0 6px rgba(59,130,246,0.3); }
+        .pipe-connector.done { background:var(--green); }
+
+        /* ── Event Feed ── */
+        .feed-section { padding:0 32px 32px; position:relative; z-index:1; }
+        .feed-container { display:flex; gap:24px; }
+        .feed-main { flex:1; }
+        .feed-sidebar { width:320px; }
+        .feed-scroll { max-height:calc(100vh - 280px); overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding-right:8px; }
+        .feed-scroll::-webkit-scrollbar { width:4px; }
+        .feed-scroll::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:2px; }
+
+        /* ── Event Card ── */
+        .event-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 20px; animation:slideIn .4s cubic-bezier(.4,0,.2,1); border-left:3px solid var(--border); transition:border-color .3s; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+        .event-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.06); }
+        .event-card.stage-inbox { border-left-color:var(--accent); }
+        .event-card.stage-llm { border-left-color:var(--purple); }
+        .event-card.stage-rag { border-left-color:var(--orange); }
+        .event-card.stage-db { border-left-color:var(--cyan); }
+        .event-card.stage-ado { border-left-color:var(--pink); }
+        .event-card.stage-notify { border-left-color:var(--green); }
+        .event-card.stage-complete { border-left-color:var(--green); background:#f0fdf4; }
+        .event-card.stage-system { border-left-color:#cbd5e1; opacity:0.7; }
+        .event-card.status-failed { border-left-color:var(--red); background:#fef2f2; }
+        @keyframes slideIn { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+
+        .event-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+        .event-title { font-size:0.9rem; font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text); }
+        .event-time { font-size:0.7rem; color:var(--dim); font-variant-numeric:tabular-nums; }
+        .event-msg { font-size:0.8rem; color:var(--dim); line-height:1.5; }
+        .event-subject { font-size:0.75rem; color:var(--accent); margin-top:6px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:500px; }
+        .event-badge { font-size:0.6rem; padding:2px 8px; border-radius:4px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+        .badge-started { background:#dbeafe; color:#1d4ed8; }
+        .badge-completed { background:#dcfce7; color:#15803d; }
+        .badge-failed { background:#fee2e2; color:#b91c1c; }
+        .badge-info { background:#f1f5f9; color:var(--dim); }
+
+        /* ── Sidebar Stats ── */
+        .sidebar-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+        .sidebar-card h3 { font-size:0.75rem; text-transform:uppercase; letter-spacing:1.5px; color:var(--dim); margin-bottom:16px; font-weight:600; }
+        .stat-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9; }
+        .stat-row:last-child { border:none; }
+        .stat-label { font-size:0.8rem; color:var(--dim); }
+        .stat-value { font-size:1.1rem; font-weight:700; }
+        .stat-value.green { color:var(--green); }
+        .stat-value.red { color:var(--red); }
+        .stat-value.blue { color:var(--accent); }
+
+        /* ── Toast ── */
+        .toast-container { position:fixed; top:80px; right:24px; z-index:200; display:flex; flex-direction:column; gap:8px; }
+        .toast { background:#16a34a; color:#fff; padding:12px 20px; border-radius:10px; font-size:0.85rem; font-weight:600; animation:toastIn .4s ease, toastOut .4s ease 3.6s forwards; box-shadow:0 8px 32px rgba(0,0,0,0.15); display:flex; align-items:center; gap:10px; max-width:400px; }
+        .toast.error { background:#dc2626; }
+        .toast.info { background:#3b82f6; }
+        @keyframes toastIn { from{opacity:0;transform:translateX(100px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes toastOut { to{opacity:0;transform:translateX(100px)} }
+
+        /* ── Empty State ── */
+        .empty-state { text-align:center; padding:80px 20px; color:var(--dim); }
+        .empty-state .icon { font-size:3rem; margin-bottom:16px; opacity:0.5; }
+        .empty-state p { font-size:0.9rem; }
+        .waiting-pulse { animation:waitPulse 2s ease-in-out infinite; }
+        @keyframes waitPulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <img src="https://i.imgur.com/244yi9K.jpeg" alt="Inetum">
+            <div>
+                <h1>Live Pipeline Monitor</h1>
+                <div class="subtitle">Real-Time Email Processing Visualization</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <a href="/" class="back-link">← Dashboard</a>
+            <div class="live-dot"></div>
+            <span class="live-label">Live</span>
+        </div>
+    </header>
+
+    <!-- Pipeline Stage Tracker -->
+    <section class="pipeline-section">
+        <div class="section-label">Current Pipeline State</div>
+        <div class="pipeline-track">
+            <div class="pipe-stage"><div class="pipe-icon" id="p-inbox">📨</div><div class="pipe-name">Inbox</div></div>
+            <div class="pipe-connector" id="c-1"></div>
+            <div class="pipe-stage"><div class="pipe-icon" id="p-llm">🧠</div><div class="pipe-name">LLM</div></div>
+            <div class="pipe-connector" id="c-2"></div>
+            <div class="pipe-stage"><div class="pipe-icon" id="p-rag">💡</div><div class="pipe-name">RAG</div></div>
+            <div class="pipe-connector" id="c-3"></div>
+            <div class="pipe-stage"><div class="pipe-icon" id="p-db">💾</div><div class="pipe-name">Database</div></div>
+            <div class="pipe-connector" id="c-4"></div>
+            <div class="pipe-stage"><div class="pipe-icon" id="p-ado">📋</div><div class="pipe-name">DevOps</div></div>
+            <div class="pipe-connector" id="c-5"></div>
+            <div class="pipe-stage"><div class="pipe-icon" id="p-notify">📩</div><div class="pipe-name">Notify</div></div>
+            <div class="pipe-connector" id="c-6"></div>
+            <div class="pipe-stage"><div class="pipe-icon" id="p-complete">🎉</div><div class="pipe-name">Done</div></div>
+        </div>
+    </section>
+
+    <!-- Event Feed + Sidebar -->
+    <section class="feed-section">
+        <div class="section-label">Event Stream</div>
+        <div class="feed-container">
+            <div class="feed-main">
+                <div class="feed-scroll" id="feed"></div>
+            </div>
+            <div class="feed-sidebar">
+                <div class="sidebar-card">
+                    <h3>Session Statistics</h3>
+                    <div class="stat-row"><span class="stat-label">Events Received</span><span class="stat-value blue" id="s-events">0</span></div>
+                    <div class="stat-row"><span class="stat-label">Emails Processed</span><span class="stat-value green" id="s-emails">0</span></div>
+                    <div class="stat-row"><span class="stat-label">Failures</span><span class="stat-value red" id="s-fails">0</span></div>
+                    <div class="stat-row"><span class="stat-label">AI Solutions</span><span class="stat-value green" id="s-rag">0</span></div>
+                </div>
+                <div class="sidebar-card">
+                    <h3>Latest Ticket</h3>
+                    <div id="latest-ticket"><p style="color:var(--dim);font-size:.8rem">Waiting for activity...</p></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="toast-container" id="toasts"></div>
+
+    <script>
+    (() => {
+        const feed = document.getElementById('feed');
+        const toasts = document.getElementById('toasts');
+        let eventCount = 0, emailCount = 0, failCount = 0, ragCount = 0;
+        let lastSeenId = 0;
+        const stageMap = { inbox:'p-inbox', llm:'p-llm', rag:'p-rag', db:'p-db', ado:'p-ado', notify:'p-notify', complete:'p-complete' };
+        const connMap = { inbox:'c-1', llm:'c-2', rag:'c-3', db:'c-4', ado:'c-5', notify:'c-6', complete:null };
+        const stageOrder = ['inbox','llm','rag','db','ado','notify','complete'];
+
+        // Show empty state initially
+        feed.innerHTML = '<div class="empty-state" id="empty"><div class="icon waiting-pulse">📡</div><p>Listening for pipeline events...</p><p style="margin-top:8px;font-size:.75rem">Send an email to the support mailbox to see real-time processing</p></div>';
+
+        function resetPipeline() {
+            Object.values(stageMap).forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = 'pipe-icon';
+            });
+            for (let i = 1; i <= 6; i++) {
+                const c = document.getElementById('c-' + i);
+                if (c) c.className = 'pipe-connector';
+            }
+        }
+
+        function activateStage(stage, status) {
+            if (stage === 'system') return;
+            const el = document.getElementById(stageMap[stage]);
+            if (!el) return;
+
+            if (status === 'started') {
+                el.className = 'pipe-icon active';
+            } else if (status === 'completed' || status === 'info') {
+                el.className = 'pipe-icon done';
+                // Activate connector
+                const idx = stageOrder.indexOf(stage);
+                if (idx >= 0) {
+                    const cId = 'c-' + (idx + 1);
+                    const c = document.getElementById(cId);
+                    if (c) c.className = 'pipe-connector done';
+                }
+                // Activate next stage
+                if (idx < stageOrder.length - 1) {
+                    const next = document.getElementById(stageMap[stageOrder[idx + 1]]);
+                    if (next && !next.classList.contains('done')) next.className = 'pipe-icon active';
+                }
+            } else if (status === 'failed') {
+                el.className = 'pipe-icon error';
+            }
+
+            if (stage === 'complete') resetPipeline(); // Reset for next ticket
+        }
+
+        function addEvent(evt) {
+            const empty = document.getElementById('empty');
+            if (empty) empty.remove();
+
+            const card = document.createElement('div');
+            const stageClass = 'stage-' + (evt.stage || 'system');
+            const statusClass = evt.status === 'failed' ? 'status-failed' : '';
+            card.className = `event-card ${stageClass} ${statusClass}`;
+
+            const time = new Date(evt.timestamp).toLocaleTimeString('en-GB', { hour12: false });
+            const badgeMap = { started:'badge-started', completed:'badge-completed', failed:'badge-failed', info:'badge-info' };
+            const badge = badgeMap[evt.status] || 'badge-info';
+
+            card.innerHTML = `
+                <div class="event-header">
+                    <div class="event-title">${esc(evt.title)} <span class="event-badge ${badge}">${evt.status}</span></div>
+                    <span class="event-time">${time}</span>
+                </div>
+                <div class="event-msg">${esc(evt.message)}</div>
+                ${evt.ticketSubject ? `<div class="event-subject">📧 ${esc(evt.ticketSubject)}</div>` : ''}
+            `;
+            feed.insertBefore(card, feed.firstChild);
+
+            // Keep max 100 cards
+            while (feed.children.length > 100) feed.removeChild(feed.lastChild);
+
+            // Update stats
+            eventCount++;
+            document.getElementById('s-events').textContent = eventCount;
+            if (evt.stage === 'complete' && evt.status === 'completed') {
+                emailCount++;
+                document.getElementById('s-emails').textContent = emailCount;
+            }
+            if (evt.status === 'failed') {
+                failCount++;
+                document.getElementById('s-fails').textContent = failCount;
+            }
+            if (evt.stage === 'rag' && evt.status === 'completed') {
+                ragCount++;
+                document.getElementById('s-rag').textContent = ragCount;
+            }
+
+            // Update latest ticket sidebar
+            if (evt.ticketSubject && evt.stage !== 'system') {
+                document.getElementById('latest-ticket').innerHTML = `
+                    <p style="font-size:.85rem;font-weight:600;margin-bottom:6px">${esc(evt.ticketSubject)}</p>
+                    <p style="font-size:.75rem;color:var(--dim)">${evt.senderEmail || ''}</p>
+                    <p style="font-size:.7rem;color:var(--accent);margin-top:8px">${esc(evt.title)} — ${time}</p>
+                `;
+            }
+
+            // Activate pipeline stage
+            activateStage(evt.stage, evt.status);
+
+            // Show toast for important events
+            if (evt.stage === 'inbox' && evt.status === 'started') showToast('info', evt.title, evt.ticketSubject);
+            else if (evt.stage === 'complete') showToast('success', evt.title, evt.message);
+            else if (evt.status === 'failed') showToast('error', evt.title, evt.message);
+        }
+
+        function showToast(type, title, msg) {
+            const t = document.createElement('div');
+            t.className = 'toast' + (type === 'error' ? ' error' : type === 'info' ? ' info' : '');
+            t.innerHTML = `<span>${esc(title)}</span><span style="font-weight:400;font-size:.75rem;opacity:.9">${esc(msg || '')}</span>`;
+            toasts.appendChild(t);
+            setTimeout(() => t.remove(), 4000);
+        }
+
+        function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        // SSE Connection
+        function connect() {
+            const source = new EventSource('/api/events');
+            source.onmessage = (e) => {
+                try {
+                    const evt = JSON.parse(e.data);
+                    if (evt.id > lastSeenId) {
+                        lastSeenId = evt.id;
+                        addEvent(evt);
+                    }
+                } catch (err) { console.warn('Parse error:', err); }
+            };
+            source.onerror = () => {
+                source.close();
+                setTimeout(connect, 3000);
+            };
+        }
+        connect();
+    })();
+    </script>
+</body>
+</html>

@@ -22,6 +22,7 @@ public class MailPollingService : BackgroundService
     private readonly GroqLlmService _llmService;
     private readonly JobFieldMappingService _jobFieldService;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly PipelineEventService _events;
     private readonly string _mailboxUser;
     private readonly string _defaultAssignee;
     private readonly string _logoUrl;
@@ -39,13 +40,15 @@ public class MailPollingService : BackgroundService
         AzureDevOpsService adoService,
         GroqLlmService llmService,
         JobFieldMappingService jobFieldService,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        PipelineEventService events)
     {
         _logger = logger;
         _adoService = adoService;
         _llmService = llmService;
         _jobFieldService = jobFieldService;
         _scopeFactory = scopeFactory;
+        _events = events;
 
         var tenantId = configuration["AzureAd:TenantId"];
         var clientId = configuration["AzureAd:ClientId"];
@@ -83,11 +86,13 @@ public class MailPollingService : BackgroundService
             try
             {
                 _logger.LogInformation("🔄 Starting automation poll cycle at {Time}...", DateTime.Now.ToString("HH:mm:ss"));
+                await _events.EmitAsync("system", "info", "🔄 Poll Cycle Started", $"Scanning for new emails at {DateTime.Now:HH:mm:ss}");
                 
                 await PollMailboxAsync(stoppingToken);
                 await PollWorkItemUpdatesAsync(stoppingToken);
                 
                 _logger.LogInformation("✅ Automation cycle complete. Sleeping for 1 minute...");
+                await _events.EmitAsync("system", "completed", "✅ Cycle Complete", "Sleeping for 1 minute before next scan");
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
@@ -272,6 +277,7 @@ public class MailPollingService : BackgroundService
             senderEmail,
             msg.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss"),
             conversationId);
+        await _events.EmitAsync("inbox", "started", "📨 New Email Received", $"From: {senderEmail}", msg.Subject, senderEmail);
         if (senderEmail != null && _allowedDomains.Any(domain => senderEmail.EndsWith(domain, StringComparison.OrdinalIgnoreCase)))
         {
             _logger.LogInformation("Email from allowed domain {SenderEmail}. Processing...", senderEmail);
@@ -307,6 +313,7 @@ public class MailPollingService : BackgroundService
 
                 if (existingTicket != null && existingTicket.AdoWorkItemId.HasValue)
                 {
+                    await _events.EmitAsync("inbox", "info", "🔗 Thread Reply Detected", $"Follow-up on ADO #{existingTicket.AdoWorkItemId}", msg.Subject, senderEmail);
                     _logger.LogInformation(
                         "🔗 Thread reply detected! ConversationId {ConvId} matches existing Ticket {TicketId} (ADO #{AdoId})",
                         conversationId, existingTicket.TicketId, existingTicket.AdoWorkItemId);
@@ -374,6 +381,7 @@ public class MailPollingService : BackgroundService
         // ═══════════════════════════════════════════════════════════════
         // STEP 1 — LLM Analysis
         // ═══════════════════════════════════════════════════════════════
+        await _events.EmitAsync("llm", "started", "🧠 LLM Analysis Started", "Extracting metadata via Groq AI...", msg.Subject, senderEmail);
         try
         {
             var supportedFields = _jobFieldService.GetAllJobFields();
@@ -390,10 +398,12 @@ public class MailPollingService : BackgroundService
                 extractedData.Severity,
                 extractedData.JobField,
                 assigneeEmail);
+            await _events.EmitAsync("llm", "completed", "✅ LLM Analysis Complete", $"Department: {extractedData.JobField} | Severity: {extractedData.Severity} | Assignee: {assigneeEmail}", msg.Subject, senderEmail, System.Text.Json.JsonSerializer.Serialize(new { extractedData.JobField, extractedData.Severity, Assignee = assigneeEmail, extractedData.CoreProblem }));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ STEP 1 FAILED — LLM analysis error for email: {Subject}", msg.Subject);
+            await _events.EmitAsync("llm", "failed", "❌ LLM Analysis Failed", ex.Message, msg.Subject, senderEmail);
             await SendTmaAlertAsync(_tmaEmail, "LLM Analysis", msg.Subject, senderEmail, ex, cancellationToken);
             await MarkAsReadAsync(msg.Id!, cancellationToken);
             return;
@@ -412,6 +422,7 @@ public class MailPollingService : BackgroundService
 
                 if (ragVerdict.HasSolution && ragVerdict.ConfidenceScore > 0.70)
                 {
+                    await _events.EmitAsync("rag", "completed", "🎯 AI Solution Found!", $"Confidence: {ragVerdict.ConfidenceScore:P0} — Proposing solution to client", msg.Subject, senderEmail);
                     _logger.LogInformation("🎯 PERFECT MATCH! AI Found a solution with Confidence: {Conf}", ragVerdict.ConfidenceScore);
                     
                     // Prepend the AI solution to the detailed description so Azure DevOps logs it clearly!
@@ -470,10 +481,12 @@ public class MailPollingService : BackgroundService
             await db.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("✅ Ticket {TicketId} persisted to PostgreSQL database (pre-ADO).", ticketId);
+            await _events.EmitAsync("db", "completed", "💾 Saved to Database", $"Ticket {ticketId:N} persisted to PostgreSQL", msg.Subject, senderEmail);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ STEP 2 FAILED — Database persist error for email: {Subject}", msg.Subject);
+            await _events.EmitAsync("db", "failed", "❌ Database Error", ex.Message, msg.Subject, senderEmail);
             await SendTmaAlertAsync(_tmaEmail, "Database Persist", msg.Subject, senderEmail, ex, cancellationToken);
             await MarkAsReadAsync(msg.Id!, cancellationToken);
             return;
@@ -513,6 +526,7 @@ public class MailPollingService : BackgroundService
                 extractedData.GetPriority(),
                 extractedData.JobField,
                 assigneeEmail);
+            await _events.EmitAsync("ado", "completed", $"📋 ADO Work Item #{workItemId} Created", $"State: {initialState} | Assigned to: {assigneeEmail}", msg.Subject, senderEmail);
 
             // Back-fill the DB ticket with ADO data
             using (var scope = _scopeFactory.CreateScope())
@@ -557,6 +571,7 @@ public class MailPollingService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ STEP 4 FAILED — ADO work item creation error for email: {Subject}", msg.Subject);
+            await _events.EmitAsync("ado", "failed", "❌ ADO Creation Failed", ex.Message, msg.Subject, senderEmail);
 
             // Update DB ticket to reflect the ADO failure
             try
@@ -607,6 +622,7 @@ public class MailPollingService : BackgroundService
                     ragVerdict,
                     cancellationToken);
                 _logger.LogInformation("Auto-reply sent to: {Email}", senderEmail);
+                await _events.EmitAsync("notify", "completed", "📩 Auto-Reply Sent", $"HTML response sent to {senderEmail}", msg.Subject, senderEmail);
             }
 
             // Assignee notification (if different from default)
@@ -641,6 +657,7 @@ public class MailPollingService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ STEP 5 FAILED — Mail sending error for email: {Subject}", msg.Subject);
+            await _events.EmitAsync("notify", "failed", "❌ Email Notification Failed", ex.Message, msg.Subject, senderEmail);
 
             // Update DB ticket to reflect mail sending failure
             try
@@ -672,6 +689,7 @@ public class MailPollingService : BackgroundService
         }
 
         _logger.LogInformation("✅ Full pipeline complete for email: {Subject} (Ticket: {TicketId}, ADO: #{WorkItemId})", msg.Subject, ticketId, workItemId);
+        await _events.EmitAsync("complete", "completed", "🎉 Pipeline Complete!", $"Ticket processed successfully — ADO #{workItemId}", msg.Subject, senderEmail);
     }
 
     /// <summary>
