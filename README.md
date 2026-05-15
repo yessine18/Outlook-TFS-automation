@@ -279,6 +279,7 @@ PFE/
 ### Phase 13 — Dashboard & Monitoring
 - [x] **Live Dashboard SPA** — Vanilla HTML/CSS/JS static frontend served via Kestrel (`UseStaticFiles()` + `MapFallbackToFile("index.html")`)
 - [x] **Dashboard REST API** — `GET /api/tickets` (latest 50) and `GET /api/stats` (total/processed/failed counts) endpoints with CORS support
+- [x] **Real-Time Event Streaming** — `Server-Sent Events (SSE)` broadcasting live granular pipeline logs (ADO state syncs, LLM analysis, RAG errors, thread detection) directly to the browser dashboard.
 
 ### Phase 14 — Agentic RAG Architecture Upgrade
 - [x] **LangGraph Orchestrator** — Replaced linear C# vector search with a Python-based `create_react_agent` LLM orchestrator capable of multi-tool reasoning and routing.
