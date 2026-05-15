@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PFE Presentation — IT Support Automation Pipeline</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'neutral',flowchart:{useMaxWidth:true},securityLevel:'loose'});</script>
+</head>
+<body>
+<div class="progress-bar" id="progress"></div>
+<div class="slide-deck">
+
+<!-- SLIDE 1: COVER -->
+<div class="slide active">
+<span class="section-label">Projet de Fin d'Études — 2024/2025</span>
+<h1 class="cover-title">Outlook-Based Support Request<br>Automation with <span class="cover-accent">Agentic AI</span></h1>
+<div class="cover-divider"></div>
+<p class="cover-meta">
+  <strong>Presented by:</strong> Yessine Fakhfakh<br>
+  <strong>Host Organization:</strong> Inetum Tunisie — Microsoft Business Line (Africa)<br>
+  <strong>Supervisor:</strong> [Supervisor Name]<br>
+  <strong>Academic Year:</strong> 2024 – 2025
+</p>
+</div>
+
+<!-- SLIDE 2: AGENDA -->
+<div class="slide">
+<span class="section-label">Overview</span>
+<h2 class="slide-title">Presentation Agenda</h2>
+<p class="slide-subtitle">A structured walkthrough of the project from context to conclusion</p>
+<div class="content-area">
+<div class="three-col">
+  <div class="card"><div class="card-icon">📋</div><div class="card-title">1. Project Context</div><div class="card-text">Host organization, problem statement, and objectives</div></div>
+  <div class="card"><div class="card-icon">🔬</div><div class="card-title">2. State of the Art</div><div class="card-text">ITSM landscape, existing solutions, and research gaps</div></div>
+  <div class="card"><div class="card-icon">🧠</div><div class="card-title">3. Theoretical Foundations</div><div class="card-text">LLMs, RAG, Agentic AI, MCP</div></div>
+  <div class="card"><div class="card-icon">📐</div><div class="card-title">4. UML Modeling</div><div class="card-text">Actors, use cases, sequence and activity diagrams</div></div>
+  <div class="card"><div class="card-icon">☁️</div><div class="card-title">5. Cloud & AI Infrastructure</div><div class="card-text">Entra ID, pgvector, LangGraph orchestrator</div></div>
+  <div class="card"><div class="card-icon">⚙️</div><div class="card-title">6. Backend & Integration</div><div class="card-text">Evolutionary prototyping iterations</div></div>
+  <div class="card"><div class="card-icon">📊</div><div class="card-title">7. Diagrams & Workflows</div><div class="card-text">Pipeline flows, state machine, architecture</div></div>
+  <div class="card"><div class="card-icon">🚀</div><div class="card-title">8. Demo & Results</div><div class="card-text">Live dashboard, key metrics, future work</div></div>
+  <div class="card"><div class="card-icon">✅</div><div class="card-title">9. Conclusion</div><div class="card-text">Achievements, value delivered, perspectives</div></div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 3: HOST ORGANIZATION -->
+<div class="slide">
+<span class="section-label">Chapter 1 — Preliminary Study</span>
+<h2 class="slide-title">Host Organization: Inetum</h2>
+<div class="content-area">
+<div class="two-col">
+  <div>
+    <h3>Inetum Group</h3>
+    <ul>
+      <li><strong>Global IT services company</strong> — consulting, software delivery, digital transformation</li>
+      <li>International footprint across <strong>27+ countries</strong></li>
+      <li>28,000+ employees worldwide</li>
+    </ul>
+    <h3 style="margin-top:24px">Inetum Tunisie</h3>
+    <ul>
+      <li>Strategic nearshore hub for <strong>infrastructure management</strong></li>
+      <li>Specialized in <strong>Microsoft Cloud architecture</strong> and modern workplace solutions</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Microsoft Business Line (Africa)</h3>
+    <ul>
+      <li>The operational division executing this <strong>Microsoft-centric project</strong></li>
+      <li>Expertise: Enterprise IT support, Microsoft 365 administration, Azure cloud services</li>
+    </ul>
+    <h3 style="margin-top:24px">Project Placement</h3>
+    <p>This PFE was conducted within the Microsoft Business Line, leveraging its direct access to Microsoft 365, Azure DevOps, and Entra ID enterprise tenants.</p>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 4: PROBLEM STATEMENT -->
+<div class="slide">
+<span class="section-label">Chapter 1 — Problem Statement</span>
+<h2 class="slide-title">The Operational Bottleneck</h2>
+<p class="slide-subtitle">Manual email triage creates delays, inconsistencies, and zero knowledge reuse</p>
+<div class="content-area">
+<div class="two-col">
+  <div>
+    <h3>❌ Current Pain Points</h3>
+    <ul>
+      <li><strong>High latency</strong> — manual reading, classification, and routing of every support email</li>
+      <li><strong>No traceability</strong> — requests buried in shared inboxes with no audit trail</li>
+      <li><strong>Duplicate effort</strong> — same known issues resolved repeatedly by L1 engineers</li>
+      <li><strong>Inconsistent communication</strong> — no standardized feedback to end-users</li>
+      <li><strong>Zero knowledge capitalization</strong> — past resolutions are never reused</li>
+    </ul>
+  </div>
+  <div>
+    <h3>✅ Proposed Solution</h3>
+    <ul>
+      <li>Build an end-to-end <strong>"zero-touch" AI orchestrator</strong></li>
+      <li>Transform emails into <strong>structured, trackable ADO work items</strong> automatically</li>
+      <li>Deploy an <strong>Agentic AI</strong> capable of autonomously resolving L1 tickets</li>
+      <li>Implement <strong>thread-aware communication</strong> and client feedback loops</li>
+      <li>Provide <strong>real-time monitoring</strong> via a live dashboard</li>
+    </ul>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 5: STATE OF THE ART -->
+<div class="slide">
+<span class="section-label">Chapter 1 — State of the Art</span>
+<h2 class="slide-title">Existing Solutions & Research Gaps</h2>
+<div class="content-area">
+<table class="styled-table">
+<thead><tr><th>Approach</th><th>Examples</th><th>Limitations</th></tr></thead>
+<tbody>
+<tr><td><strong>Rule-Based Middleware</strong></td><td>Keyword filters, static routing rules</td><td>Fragile, cannot scale, high maintenance overhead</td></tr>
+<tr><td><strong>Commercial AI-ITSM</strong></td><td>ServiceNow AI, Zendesk AI, Freshdesk</td><td>Expensive, vendor lock-in, limited customization</td></tr>
+<tr><td><strong>Basic NLP Pipelines</strong></td><td>Static RAG, intent classifiers</td><td>Linear, no multi-tool reasoning, hallucination-prone</td></tr>
+<tr><td><strong>Our Approach</strong></td><td>Agentic AI + MCP + LangGraph</td><td style="color:var(--green);font-weight:600">Custom, extensible, zero vendor lock-in ✓</td></tr>
+</tbody>
+</table>
+<div style="margin-top:24px;padding:20px;background:var(--light-gray);border-radius:10px;border-left:4px solid var(--accent)">
+  <strong>Research Gap Identified:</strong> No existing solution combines autonomous multi-tool AI reasoning (Agentic AI), secure API bridging (MCP), thread-aware communication, and client feedback loops in a single, cost-free pipeline tailored to Microsoft enterprise environments.
+</div>
+</div>
+</div>
+
+<!-- SLIDE 6: THEORETICAL FOUNDATIONS -->
+<div class="slide">
+<span class="section-label">Chapter 1 — Theoretical Foundations</span>
+<h2 class="slide-title">Core Concepts & Technologies</h2>
+<div class="content-area">
+<div class="three-col">
+  <div class="card">
+    <div class="card-icon">🤖</div>
+    <div class="card-title">Large Language Models (LLMs)</div>
+    <div class="card-text">Transformer-based generative AI for intelligent text comprehension and structured metadata extraction. We use <strong>Groq / LLaMA 3.3 70B</strong>.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon">🗄️</div>
+    <div class="card-title">RAG (Retrieval-Augmented Generation)</div>
+    <div class="card-text">Grounds AI responses in verified knowledge bases using vector embeddings (384D, all-MiniLM-L6-v2) and cosine similarity search via <strong>pgvector</strong>.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon">🧠</div>
+    <div class="card-title">Agentic AI (ReAct Framework)</div>
+    <div class="card-text">Autonomous AI agents capable of multi-step reasoning and dynamic tool selection via <strong>LangGraph create_react_agent</strong>.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon">🔌</div>
+    <div class="card-title">Model Context Protocol (MCP)</div>
+    <div class="card-text">Open standard (Anthropic) for securely connecting LLMs to external APIs without exposing credentials to the AI model.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon">⚡</div>
+    <div class="card-title">Event-Driven Architecture</div>
+    <div class="card-text">Background daemon polling, REST webhooks, and async inter-system communication via Microsoft Graph and Power Automate.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon">🔐</div>
+    <div class="card-title">OAuth 2.0 Client Credentials</div>
+    <div class="card-text">Daemon-based authentication via Azure Entra ID for zero-human-intervention access to Microsoft Graph APIs.</div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 7: TECH STACK -->
+<div class="slide">
+<span class="section-label">Technical Overview</span>
+<h2 class="slide-title">Technology Stack</h2>
+<div class="content-area">
+<div class="two-col">
+  <div>
+    <h3>Backend & Runtime</h3>
+    <div class="badge-row">
+      <span class="badge">🟣 .NET 10.0 Worker Service</span>
+      <span class="badge">🐍 Python 3 (venv)</span>
+      <span class="badge">🦙 LangChain / LangGraph</span>
+      <span class="badge">🔌 MCP SDK (FastMCP)</span>
+    </div>
+    <h3 style="margin-top:20px">AI & Data</h3>
+    <div class="badge-row">
+      <span class="badge">🤖 Groq API (LLaMA 3.3 70B)</span>
+      <span class="badge">🤗 HuggingFace sentence-transformers</span>
+      <span class="badge">🐘 PostgreSQL + pgvector</span>
+      <span class="badge">📊 Entity Framework Core</span>
+    </div>
+  </div>
+  <div>
+    <h3>Microsoft Integrations</h3>
+    <div class="badge-row">
+      <span class="badge">📧 Microsoft Graph SDK v5</span>
+      <span class="badge">🔐 Azure Entra ID</span>
+      <span class="badge">📋 Azure DevOps REST API</span>
+      <span class="badge">💬 Power Automate Webhooks</span>
+      <span class="badge">⭐ Outlook Actionable Messages</span>
+    </div>
+    <h3 style="margin-top:20px">Frontend & Tooling</h3>
+    <div class="badge-row">
+      <span class="badge">🌐 Vanilla HTML/CSS/JS Dashboard</span>
+      <span class="badge">🐳 Docker (PostgreSQL)</span>
+      <span class="badge">🔗 Dev Tunnels</span>
+      <span class="badge">📄 CsvHelper</span>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 8: METHODOLOGY -->
+<div class="slide">
+<span class="section-label">Chapter 1 — Methodology</span>
+<h2 class="slide-title">Project Methodology</h2>
+<div class="content-area">
+<div class="two-col">
+  <div>
+    <h3>CRISP-DM for AI Lifecycle</h3>
+    <p>Used to manage the AI modeling, prompt engineering, and Agentic tuning phases systematically.</p>
+    <h3 style="margin-top:20px">Agile Kanban + Evolutionary Prototyping</h3>
+    <p>Continuous flow model with WIP limits. The Azure DevOps board served as both the product feature AND the project management tool. Each iteration solved a specific limitation of the previous one.</p>
+  </div>
+  <div>
+    <h3>7-Phase Execution Roadmap</h3>
+    <div class="timeline">
+      <div class="timeline-item"><h4>Phase 1</h4><p>Infrastructure & Authentication</p></div>
+      <div class="timeline-item"><h4>Phase 2</h4><p>Email Ingestion Pipeline</p></div>
+      <div class="timeline-item"><h4>Phase 3</h4><p>Data Persistence & Audit</p></div>
+      <div class="timeline-item"><h4>Phase 4</h4><p>AI Classification & Extraction</p></div>
+      <div class="timeline-item"><h4>Phase 5</h4><p>Agentic RAG Orchestration</p></div>
+      <div class="timeline-item"><h4>Phase 6</h4><p>Enterprise Integrations</p></div>
+      <div class="timeline-item"><h4>Phase 7</h4><p>Client Feedback & Monitoring</p></div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 9: GLOBAL ARCHITECTURE -->
+<div class="slide">
+<span class="section-label">System Architecture</span>
+<h2 class="slide-title">Global System Architecture</h2>
+<p class="slide-subtitle">End-to-end pipeline connecting Microsoft Cloud services with local AI engines</p>
+<div class="content-area">
+<div class="mermaid">
+flowchart LR
+    A["📨 Outlook Inbox"] -->|"MS Graph API"| B["🔄 Mail Polling Service"]
+    B -->|"Email Body"| C["🤖 Groq LLM Extraction"]
+    subgraph Agentic RAG Pipeline
+        C -->|"Detailed Problem"| D["🧠 LangGraph Orchestrator"]
+        D <-->|"Tool: pgvector"| E["🗄️ PostgreSQL KB"]
+        D <-->|"Tool: MCP"| F["🔌 Learn Catalog MCP"]
+        D <-->|"Tool: MCP"| F4["🌐 MS Official MCP"]
+        D -->|"JSON"| F3["⚡ RagVerdict"]
+    end
+    F3 -->|"Has Solution"| H["🟢 Auto-Reply + Solution"]
+    F3 -->|"No Solution"| G["📋 Azure DevOps Work Item"]
+    G -->|"Assign"| I["👤 Assignee Notification"]
+    G -->|"Webhook"| L["💬 Teams Adaptive Card"]
+    H -.->|"Validation"| K["✅❌ Client Validation API"]
+    K -->|"Resolve/Re-open"| G
+</div>
+</div>
+</div>
+
+<!-- SLIDE 10: UML SYSTEM DECOMPOSITION -->
+<div class="slide">
+<span class="section-label">Chapter 2 — UML Modeling</span>
+<h2 class="slide-title">System Decomposition (Package Diagram)</h2>
+<p class="slide-subtitle">Five core functional modules and their dependencies</p>
+<div class="content-area">
+<div class="mermaid">
+graph TB
+    A["📦 Email Ingestion & Thread Management"] --> B["📦 AI Analysis & Agentic Orchestration"]
+    B --> C["📦 ITSM Work Item Management"]
+    C --> D["📦 Notification & Communication"]
+    C --> E["📦 Client Interaction & Feedback"]
+    A --> C
+    D --> E
+</div>
+<div class="three-col" style="margin-top:24px">
+  <div class="card"><div class="card-title">📧 Email Ingestion</div><div class="card-text">Mailbox polling, thread detection via ConversationId, attachment extraction, domain whitelist filtering</div></div>
+  <div class="card"><div class="card-title">🤖 AI Analysis</div><div class="card-text">LLM metadata extraction, Agentic multi-tool routing, knowledge retrieval via 3 tools</div></div>
+  <div class="card"><div class="card-title">📋 ITSM Management</div><div class="card-text">ADO Work Item creation, state sync via WIQL polling, audit logging to PostgreSQL</div></div>
+  <div class="card"><div class="card-title">📬 Notifications</div><div class="card-text">Threaded .Reply auto-replies, assignee alerts, Teams Adaptive Cards via Power Automate</div></div>
+  <div class="card"><div class="card-title">⭐ Client Feedback</div><div class="card-text">Accept/Reject validation endpoints, Outlook Adaptive Card ratings, satisfaction tracking</div></div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 11: EVOLUTIONARY ITERATIONS 1-3 -->
+<div class="slide">
+<span class="section-label">Chapter 4 — Evolutionary Prototyping</span>
+<h2 class="slide-title">Iterations 1 – 3: Foundation to Resilience</h2>
+<div class="content-area">
+  <div class="iter-card">
+    <h4>Iteration 1 — Basic API Integration</h4>
+    <div class="iter-tech">.NET Worker Service • Microsoft Graph SDK v5 • Azure DevOps REST API</div>
+    <p>Background daemon polls Outlook every 60s. Creates ADO Issue from raw email subject/body. Marks email as read.</p>
+    <div class="limitation">⚠️ Limitation: Raw HTML dumped into ADO. No metadata extraction, no routing, no severity classification.</div>
+  </div>
+  <div class="iter-card">
+    <h4>Iteration 2 — LLM-Powered Extraction & Routing</h4>
+    <div class="iter-tech">Groq API (LLaMA 3.3 70B) • CsvHelper • JSON Prompt Engineering</div>
+    <p>LLM extracts structured metadata (coreProblem, severity, jobField). CSV-based routing to correct assignee. HTML auto-reply emails with QR codes. Domain whitelist spam filter.</p>
+    <div class="limitation">⚠️ Limitation: No persistent storage. If pipeline crashes after LLM but before ADO — data is lost forever.</div>
+  </div>
+  <div class="iter-card">
+    <h4>Iteration 3 — State Management & Fault Tolerance</h4>
+    <div class="iter-tech">PostgreSQL • Entity Framework Core • PipelineStatus State Machine • TicketStateLogs</div>
+    <p>"Database-First" persistence. 10-value state machine. Bidirectional ADO sync via WIQL. Step-level error isolation. TMA alert emails on failures.</p>
+    <div class="limitation">⚠️ Limitation: Every ticket escalated to humans. Known issues that could be auto-resolved still waste L1 engineering hours.</div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 12: EVOLUTIONARY ITERATIONS 4-6 -->
+<div class="slide">
+<span class="section-label">Chapter 4 — Evolutionary Prototyping</span>
+<h2 class="slide-title">Iterations 4 – 6: Intelligence to Autonomy</h2>
+<div class="content-area">
+  <div class="iter-card">
+    <h4>Iteration 4 — Agentic AI & Auto-Resolution</h4>
+    <div class="iter-tech">Python–C# Bridge • LangGraph Orchestrator • RagVerdict JSON • pgvector</div>
+    <p>Passes problem to Python LangGraph agent with 3 tools. If AI finds solution (confidence > 70%), injects green solution box into auto-reply with Accept/Reject buttons. ADO Work Item always created regardless.</p>
+    <div class="limitation">⚠️ Limitation: No feedback loop. System delivers AI solutions but can't verify if they actually helped the client.</div>
+  </div>
+  <div class="iter-card">
+    <h4>Iteration 5 — Client Validation & Feedback</h4>
+    <div class="iter-tech">Minimal API Webhooks • Outlook Actionable Messages • Adaptive Cards v1.4</div>
+    <p>Accept → ADO set to "Done". Reject → stays open for human. Closure emails embed star rating (1–5) Adaptive Card. Feedback persisted to DB + ADO discussion.</p>
+    <div class="limitation">⚠️ Limitation: All replies are standalone emails. Client follow-ups create duplicate ADO tickets. No thread tracking.</div>
+  </div>
+  <div class="iter-card">
+    <h4>Iteration 6 — Thread Intelligence & Full Integration</h4>
+    <div class="iter-tech">Graph .Reply • ConversationId Tracking • LLM Summarization • Teams Webhooks • Dashboard</div>
+    <p>Thread-aware .Reply endpoint. ConversationId matching prevents duplicates. LLM summarizes follow-ups as ADO comments. Color-coded Teams cards (🟢/🟠). Live dashboard SPA.</p>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 13: AGENTIC RAG ARCHITECTURE -->
+<div class="slide">
+<span class="section-label">Chapter 3 — AI Orchestration</span>
+<h2 class="slide-title">Agentic RAG Architecture</h2>
+<p class="slide-subtitle">Three autonomous tools orchestrated by a LangGraph ReAct agent</p>
+<div class="content-area">
+<div class="three-col" style="margin-bottom:20px">
+  <div class="card" style="border-top:3px solid var(--accent)">
+    <div class="card-icon">🗄️</div>
+    <div class="card-title">Tool 1: Internal KB</div>
+    <div class="card-text">pgvector cosine similarity search against <strong>14,000+ Microsoft Docs</strong> embedded as 384D vectors. Returns Top-3 most relevant documentation chunks.</div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--green)">
+    <div class="card-icon">📚</div>
+    <div class="card-title">Tool 2: Learn Catalog MCP</div>
+    <div class="card-text"><strong>Custom MCP server</strong> we built. Authenticates via Entra ID to fetch official Microsoft training modules, learning paths, and certifications.</div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--orange)">
+    <div class="card-icon">🌐</div>
+    <div class="card-title">Tool 3: Official MS MCP</div>
+    <div class="card-text">Custom HTTP wrapper bypassing Microsoft's 405 error. Parses SSE streams from the official <strong>learn.microsoft.com/api/mcp</strong> endpoint.</div>
+  </div>
+</div>
+<div style="padding:16px 20px;background:var(--light-gray);border-radius:10px;border-left:4px solid var(--green)">
+  <strong>Key Innovation:</strong> Microsoft's official MCP server lacks training/certification content. We built our own custom MCP server (<code>learn_catalog_mcp.py</code>) to bridge this gap — effectively engineering the feature Microsoft hasn't released yet.
+</div>
+</div>
+</div>
+
+<!-- SLIDE 14: PIPELINE FLOW -->
+<div class="slide">
+<span class="section-label">Pipeline Workflow</span>
+<h2 class="slide-title">Email Processing Pipeline</h2>
+<p class="slide-subtitle">5-step pipeline executed for every incoming support email</p>
+<div class="content-area">
+<div class="flow-steps">
+  <div class="flow-step" style="border-top:3px solid var(--accent)"><div class="step-num">1</div><strong>LLM Analysis</strong><br>Groq extracts metadata, severity, job field</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step" style="border-top:3px solid #8b5cf6"><div class="step-num" style="background:#8b5cf6">1.5</div><strong>RAG Evaluation</strong><br>Agentic AI auto-resolution attempt</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step" style="border-top:3px solid var(--green)"><div class="step-num" style="background:var(--green)">2</div><strong>DB Persist</strong><br>Database-first save to PostgreSQL</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step" style="border-top:3px solid var(--orange)"><div class="step-num" style="background:var(--orange)">3</div><strong>ADO Creation</strong><br>Issue work item with routing</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-step" style="border-top:3px solid #ec4899"><div class="step-num" style="background:#ec4899">4</div><strong>Notifications</strong><br>Reply + Assignee + Teams</div>
+</div>
+<div class="mermaid" style="margin-top:24px">
+flowchart LR
+    A["📨 Unread Email"] --> B{"Domain\nAllowed?"}
+    B -->|"No"| C["🚫 Skip"]
+    B -->|"Yes"| D["🤖 Groq LLM\nExtract Metadata"]
+    D --> E["🧠 Agentic RAG\n3-Tool Evaluation"]
+    E --> F{"Confidence\n> 70%?"}
+    F -->|"Yes"| G["🟢 Inject AI Solution"]
+    F -->|"No"| H["🟠 Human Route"]
+    G --> I["💾 Save to DB"]
+    H --> I
+    I --> J["📋 Create ADO Issue"]
+    J --> K["📬 Send Notifications"]
+</div>
+</div>
+</div>
+
+<!-- SLIDE 15: STATE MACHINE -->
+<div class="slide">
+<span class="section-label">System Design</span>
+<h2 class="slide-title">Pipeline State Machine</h2>
+<p class="slide-subtitle">10-value PipelineStatus enum tracking every ticket through its lifecycle</p>
+<div class="content-area">
+<div class="mermaid">
+stateDiagram-v2
+    [*] --> EmailReceived: Email polled
+    EmailReceived --> LlmProcessing: Send to Groq
+    LlmProcessing --> LlmSuccess: Extraction OK
+    LlmProcessing --> LlmFailed: API error
+    LlmSuccess --> AdoCreated: Work Item created
+    LlmSuccess --> AdoFailed: ADO API error
+    AdoCreated --> PendingClientValidation: RAG solution found
+    PendingClientValidation --> ClientAcceptedResolution: Accept
+    PendingClientValidation --> ClientRejectedResolution: Reject
+    ClientAcceptedResolution --> [*]: Ticket closed
+    ClientRejectedResolution --> [*]: Human takes over
+    LlmFailed --> [*]: TMA Alert
+    AdoFailed --> [*]: TMA Alert
+</div>
+</div>
+</div>
+
+<!-- SLIDE 16: DATABASE & CLASS DIAGRAM -->
+<div class="slide">
+<span class="section-label">Data Architecture</span>
+<h2 class="slide-title">Database Schema & Service Architecture</h2>
+<div class="content-area">
+<div class="two-col">
+  <div>
+    <h3>Entity-Relationship Model</h3>
+    <div class="mermaid">
+erDiagram
+    TICKETS {
+        uuid TicketId PK
+        varchar MessageId UK
+        varchar SenderEmail
+        varchar Subject
+        int AdoWorkItemId
+        varchar AdoItemState
+        int ClientRating
+        varchar CurrentPipelineStatus
+    }
+    TICKET_STATE_LOGS {
+        uuid LogId PK
+        uuid TicketId FK
+        varchar PipelineStatus
+        varchar ErrorMessage
+        timestamp CreatedAt
+    }
+    MICROSOFT_DOCS {
+        serial id PK
+        text document_title
+        text chunk_text
+        vector embedding
+    }
+    TICKETS ||--o{ TICKET_STATE_LOGS : "has many"
+    </div>
+  </div>
+  <div>
+    <h3>Key Design Patterns</h3>
+    <div class="card" style="margin-bottom:12px"><div class="card-title">💾 Database-First Persistence</div><div class="card-text">Ticket saved to PostgreSQL BEFORE ADO creation. If ADO fails, data is safe.</div></div>
+    <div class="card" style="margin-bottom:12px"><div class="card-title">🏷️ Tag-Based Email Dedup</div><div class="card-text">EmailSent_Done / EmailSent_Doing tags prevent duplicate notification emails across polling cycles.</div></div>
+    <div class="card" style="margin-bottom:12px"><div class="card-title">🔄 Scoped DbContext</div><div class="card-text">IServiceScopeFactory creates fresh DB contexts inside the Singleton background service.</div></div>
+    <div class="card"><div class="card-title">👻 Hidden Metadata</div><div class="card-text">Sender info stored as invisible data-* HTML attributes in ADO descriptions for state-change email routing.</div></div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 17: FEATURES OVERVIEW -->
+<div class="slide">
+<span class="section-label">Capabilities</span>
+<h2 class="slide-title">Complete Feature Set</h2>
+<div class="content-area">
+<table class="styled-table">
+<thead><tr><th>Feature</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td>🤖 <strong>AI Email Analysis</strong></td><td>Groq LLM extracts problem, severity, department, and resolution estimate</td></tr>
+<tr><td>🧠 <strong>Agentic RAG</strong></td><td>LangGraph orchestrator with 3 autonomous tools for auto-resolution</td></tr>
+<tr><td>🔌 <strong>Model Context Protocol</strong></td><td>Custom MCP Server bridging Groq LLM to live Microsoft REST APIs</td></tr>
+<tr><td>📋 <strong>Auto Work Item Creation</strong></td><td>Azure DevOps Issues with priority, assignee, and full metadata</td></tr>
+<tr><td>🔗 <strong>Thread Tracking</strong></td><td>ConversationId-based detection prevents duplicate tickets</td></tr>
+<tr><td>💬 <strong>Teams Alerts</strong></td><td>Color-coded Adaptive Cards via Power Automate Webhooks</td></tr>
+<tr><td>⭐ <strong>Outlook Feedback</strong></td><td>In-email Adaptive Card with star rating synced to DB + ADO</td></tr>
+<tr><td>📎 <strong>Attachments</strong></td><td>Inline images → ADO comments; files → ADO attachment storage</td></tr>
+<tr><td>🔄 <strong>State Sync</strong></td><td>WIQL polling with tag-based deduplication for email notifications</td></tr>
+<tr><td>🛡️ <strong>Error Handling</strong></td><td>Step-level isolation, graceful RAG degradation, TMA alerts</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- SLIDE 18: KEY METRICS -->
+<div class="slide">
+<span class="section-label">Results</span>
+<h2 class="slide-title">Key Performance Metrics</h2>
+<p class="slide-subtitle">Target objectives achieved by the final system</p>
+<div class="content-area">
+<div class="stat-row" style="margin-bottom:32px">
+  <div class="stat-card"><div class="stat-num">&lt; 60s</div><div class="stat-label">End-to-End Latency</div></div>
+  <div class="stat-card"><div class="stat-num">14K+</div><div class="stat-label">KB Documents Indexed</div></div>
+  <div class="stat-card"><div class="stat-num">384D</div><div class="stat-label">Vector Embedding Dimension</div></div>
+  <div class="stat-card"><div class="stat-num">3</div><div class="stat-label">Agentic AI Tools</div></div>
+  <div class="stat-card"><div class="stat-num">10</div><div class="stat-label">Pipeline States</div></div>
+</div>
+<div class="two-col">
+  <div>
+    <h3>Operational Achievements</h3>
+    <ul>
+      <li><strong>Zero-touch L1 ticket deflection</strong> — AI autonomously resolves common issues</li>
+      <li><strong>Zero duplicate tickets</strong> — ConversationId thread detection</li>
+      <li><strong>Full audit trail</strong> — every state transition logged to PostgreSQL</li>
+      <li><strong>Graceful fault tolerance</strong> — no pipeline crashes on individual step failures</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Technical Achievements</h3>
+    <ul>
+      <li><strong>Custom MCP Server</strong> — bridging gap in Microsoft's official MCP</li>
+      <li><strong>3-tool Agentic AI</strong> — autonomous multi-step reasoning</li>
+      <li><strong>Zero Data Retention by LLM</strong> — enterprise security compliant</li>
+      <li><strong>15 integrated phases</strong> — from scaffolding to production-ready</li>
+    </ul>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 19: CONCLUSION -->
+<div class="slide">
+<span class="section-label">Conclusion & Perspectives</span>
+<h2 class="slide-title">Conclusion & Future Perspectives</h2>
+<div class="content-area">
+<div class="two-col">
+  <div>
+    <h3>✅ Summary of Achievements</h3>
+    <p style="margin-bottom:16px">Successfully transitioned L1 helpdesk operations from a manual bottleneck to a <strong>fully autonomous, multi-tool Agentic AI orchestrator</strong> with conversation-aware thread intelligence, client validation loops, and real-time monitoring.</p>
+    <h3>💡 Value Delivered</h3>
+    <ul>
+      <li>Eliminated manual email triage latency</li>
+      <li>Automated L1 ticket resolution using verified knowledge</li>
+      <li>Standardized client communication with threaded replies</li>
+      <li>Full operational visibility via live dashboard</li>
+      <li>Cost-free, vendor-independent architecture</li>
+    </ul>
+  </div>
+  <div>
+    <h3>🔮 Future Perspectives</h3>
+    <div class="card" style="margin-bottom:10px"><div class="card-title">🔌 Expand MCP Ecosystem</div><div class="card-text">Add Jira, ServiceNow, and HR database tools to the Agentic orchestrator</div></div>
+    <div class="card" style="margin-bottom:10px"><div class="card-title">👁️ Vision Capabilities</div><div class="card-text">Image-based issue analysis for screenshots and error captures</div></div>
+    <div class="card" style="margin-bottom:10px"><div class="card-title">🐳 CI/CD & Cloud Deployment</div><div class="card-text">Docker containerization + Azure Container Instance + Key Vault</div></div>
+    <div class="card" style="margin-bottom:10px"><div class="card-title">🌍 Multi-Language Support</div><div class="card-text">International helpdesk operations across languages</div></div>
+    <div class="card"><div class="card-title">📈 Predictive Analytics</div><div class="card-text">Ticket volume forecasting and trend analysis</div></div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- SLIDE 20: THANK YOU -->
+<div class="slide">
+<span class="section-label">Merci</span>
+<h1 class="cover-title">Thank You</h1>
+<div class="cover-divider"></div>
+<p class="slide-subtitle" style="margin-bottom:32px">Questions & Discussion</p>
+<div class="stat-row">
+  <div class="stat-card"><div class="stat-num">📧</div><div class="stat-label">Email Ingestion</div></div>
+  <div class="stat-card"><div class="stat-num">🤖</div><div class="stat-label">AI Analysis</div></div>
+  <div class="stat-card"><div class="stat-num">🧠</div><div class="stat-label">Agentic RAG</div></div>
+  <div class="stat-card"><div class="stat-num">📋</div><div class="stat-label">ADO Automation</div></div>
+  <div class="stat-card"><div class="stat-num">⭐</div><div class="stat-label">Client Feedback</div></div>
+</div>
+<p class="cover-meta" style="margin-top:32px">
+  <strong>Yessine Fakhfakh</strong> — Inetum Tunisie<br>
+  Projet de Fin d'Études 2024/2025
+</p>
+</div>
+
+</div><!-- end slide-deck -->
+
+<div class="nav-bar">
+  <button id="prev-btn">← Previous</button>
+  <span id="slide-counter">1 / 20</span>
+  <button id="next-btn">Next →</button>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

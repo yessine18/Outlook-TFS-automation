@@ -165,6 +165,7 @@ public class MailPollingService : BackgroundService
                         {
                             _logger.LogInformation("🔄 Syncing ADO WorkItem #{Id}: DB State '{DbState}' -> ADO State '{AdoState}'", 
                                 item.Id, ticket.AdoItemState, state);
+                            await _events.EmitAsync("system", "info", "🔄 ADO State Synced", $"WorkItem #{item.Id}: {ticket.AdoItemState} ➔ {state}");
                             
                             ticket.AdoItemState = state;
                             ticket.LastUpdatedAt = DateTime.UtcNow;
@@ -223,6 +224,7 @@ public class MailPollingService : BackgroundService
                                 catch (Exception dbEx)
                                 {
                                     _logger.LogWarning(dbEx, "Could not retrieve MessageId for WorkItem #{Id}. Will send as new email.", item.Id);
+                                    await _events.EmitAsync("system", "info", "⚠️ Missing MessageId", $"WorkItem #{item.Id}. Sending state update as new email instead of thread.");
                                 }
 
                                 await SendAutoReplyAsync(
@@ -238,6 +240,7 @@ public class MailPollingService : BackgroundService
 
                                 await _adoService.AddWorkItemTagAsync(item.Id.Value, tags, expectedTag, cancellationToken);
                                 _logger.LogInformation("Sent state update for WorkItem #{Id} to {State} ({Email})", item.Id, state, email);
+                                await _events.EmitAsync("ado", "completed", "📬 State Update Email Sent", $"WorkItem #{item.Id} is now {state}. Email sent to {email}");
                             }
                         }
                     }
@@ -281,10 +284,12 @@ public class MailPollingService : BackgroundService
         if (senderEmail != null && _allowedDomains.Any(domain => senderEmail.EndsWith(domain, StringComparison.OrdinalIgnoreCase)))
         {
             _logger.LogInformation("Email from allowed domain {SenderEmail}. Processing...", senderEmail);
+            await _events.EmitAsync("system", "info", "✅ Domain Validated", $"Sender {senderEmail} is authorized.", msg.Subject, senderEmail);
         }
         else
         {
             _logger.LogWarning("Email from unauthorized domain {SenderEmail}. Skipping...", senderEmail);
+            await _events.EmitAsync("system", "failed", "🛑 Unauthorized Domain", $"Ignored email from {senderEmail}.", msg.Subject, senderEmail);
             await MarkAsReadAsync(msg.Id!, cancellationToken);
             return;
         }
@@ -321,6 +326,7 @@ public class MailPollingService : BackgroundService
                     // Use LLM to summarize the follow-up reply
                     var summary = await _llmService.SummarizeFollowUpAsync(emailBody, cancellationToken);
                     _logger.LogInformation("📝 LLM Follow-up Summary: {Summary}", summary);
+                    await _events.EmitAsync("llm", "completed", "📝 Reply Summarized", summary, msg.Subject, senderEmail);
 
                     // Append as a styled HTML comment to the ADO Work Item
                     var commentHtml = $"<div style='border-left: 4px solid #3b82f6; padding: 12px; margin: 8px 0; background: #eff6ff;'>" +
@@ -368,6 +374,7 @@ public class MailPollingService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "⚠️ Thread detection failed for ConversationId {ConvId}. Proceeding with new ticket creation.", conversationId);
+                await _events.EmitAsync("system", "failed", "⚠️ Thread Detection Failed", $"Creating new ticket instead. Error: {ex.Message}", msg.Subject, senderEmail);
             }
         }
 
@@ -436,6 +443,7 @@ public class MailPollingService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "⚠️ STEP 1.5 FAILED — RAG Evaluation error for email: {Subject}. Pipeline will continue normally.", msg.Subject);
+            await _events.EmitAsync("rag", "failed", "⚠️ RAG Evaluation Error", ex.Message, msg.Subject, senderEmail);
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -1133,6 +1141,7 @@ public class MailPollingService : BackgroundService
                 }, cancellationToken: cancellationToken);
 
             _logger.LogInformation("🚨 TMA alert sent to {TmaEmail} for failed step: {FailedStep}", tmaEmail, failedStep);
+            await _events.EmitAsync("system", "failed", "🚨 TMA Alert Sent", $"Pipeline halted at {failedStep}. Alert sent to Support Team.", emailSubject ?? "Unknown", tmaEmail);
         }
         catch (Exception ex)
         {
