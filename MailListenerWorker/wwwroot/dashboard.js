@@ -105,9 +105,16 @@
     if (manual) { refreshIcon.classList.add('spinning'); }
     const fetchStart = performance.now();
     try {
+      let secretParam = sessionStorage.getItem("adminKey");
+      if (!secretParam) {
+          const pass = prompt("🔒 Please enter the Admin Password:");
+          secretParam = "?secret=" + encodeURIComponent(pass);
+          sessionStorage.setItem("adminKey", secretParam);
+      }
+      const adminSecret = secretParam;
       const [statsRes, ticketsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/stats`),
-        fetch(`${API_BASE}/api/tickets`)
+        fetch(`${API_BASE}/api/stats${adminSecret}`),
+        fetch(`${API_BASE}/api/tickets${adminSecret}`)
       ]);
       if (!statsRes.ok || !ticketsRes.ok) throw new Error('API error');
       const stats   = await statsRes.json();

@@ -124,7 +124,7 @@
             </div>
         </div>
         <div class="header-right">
-            <a href="/" class="back-link">← Dashboard</a>
+            <a href="/admin-dashboard.html" class="back-link">← Dashboard</a>
             <div class="live-dot"></div>
             <span class="live-label">Live</span>
         </div>
@@ -299,7 +299,13 @@
 
         // SSE Connection
         function connect() {
-            const source = new EventSource('/api/events');
+            let secretParam = sessionStorage.getItem("adminKey");
+            if (!secretParam) {
+                const pass = prompt("🔒 Please enter the Admin Password:");
+                secretParam = "?secret=" + encodeURIComponent(pass);
+                sessionStorage.setItem("adminKey", secretParam);
+            }
+            const source = new EventSource('/api/events' + secretParam);
             source.onmessage = (e) => {
                 try {
                     const evt = JSON.parse(e.data);

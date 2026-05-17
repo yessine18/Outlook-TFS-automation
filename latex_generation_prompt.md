@@ -47,8 +47,10 @@ This project is an **AI-Driven IT Service Management (ITSM) Automation Pipeline*
 - All titles (`\chapter{}`, `\section{}`, `\subsection{}`, `\subsubsection{}`) must use **sentence case**: only the **first word** has an uppercase first letter. The rest are lowercase unless they are proper nouns (e.g., "Azure DevOps", "Microsoft", "PostgreSQL").
 - ✅ Correct: `\section{Relational state management and fault tolerance}`
 - ✅ Correct: `\subsection{The LangGraph orchestrator and tool binding}`
+- ✅ Correct: `\subsubsection{Implementation details}`
 - ❌ Wrong: `\section{Relational State Management And Fault Tolerance}`
 - ❌ Wrong: `\subsection{The LangGraph Orchestrator And Tool Binding}`
+- ❌ Wrong: `\subsubsection{Implementation Details}`
 
 #### 3. Source Citations and Anti-Plagiarism
 - **Every piece of information** that comes from an external source (article, website, documentation, book, specification) **MUST include an inline citation** using `\cite{key}` or `\footnote{\url{...}}`.

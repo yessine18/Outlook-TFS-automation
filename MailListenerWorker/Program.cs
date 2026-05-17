@@ -40,9 +40,20 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseCors("AllowAll");
+
+// ── Security Guard for Dashboard (PFE Protection) ───────
+var dashboardAuthFilter = new Func<EndpointFilterInvocationContext, EndpointFilterDelegate, ValueTask<object?>>(async (context, next) =>
+{
+    var secret = context.HttpContext.Request.Query["secret"];
+    // Using a hardcoded secret for the PFE demonstration
+    if (secret != "InetumAdmin2026!") 
+    {
+        return Results.Unauthorized();
+    }
+    return await next(context);
+});
 
 // ── Minimal API: Get Tickets ──────────────────────────
 app.MapGet("/api/tickets", async (AppDbContext db) =>
@@ -51,7 +62,7 @@ app.MapGet("/api/tickets", async (AppDbContext db) =>
         .OrderByDescending(t => t.ReceivedAt)
         .Take(50)
         .ToListAsync();
-});
+}).AddEndpointFilter(dashboardAuthFilter);
 
 // ── Minimal API: Stats (Comprehensive — Real Data) ───
 app.MapGet("/api/stats", async (AppDbContext db) =>
@@ -189,7 +200,7 @@ app.MapGet("/api/stats", async (AppDbContext db) =>
         HourlyCounts = hourlyCounts,
         Departments = departments
     };
-});
+}).AddEndpointFilter(dashboardAuthFilter);
 
 // ── Minimal API: Validation Endpoint ─────────────────
 app.MapGet("/api/ticket/{id:int}/validate", async (int id, bool accepted, AppDbContext db, AzureDevOpsService adoService, ILogger<Program> logger) =>
@@ -329,8 +340,8 @@ app.MapGet("/api/events", async (PipelineEventService eventService, HttpContext 
     {
         eventService.Unsubscribe(channel);
     }
-});
+}).AddEndpointFilter(dashboardAuthFilter);
 
-app.MapFallbackToFile("index.html");
-
+// Fallback to index.html is removed to hide the dashboard from root '/' access.
+// You must now explicitly navigate to /admin-dashboard.html to see the UI.
 app.Run();
