@@ -26,32 +26,32 @@ flowchart LR
         C -->|Detailed Problem| D["🧠 Python LangGraph Orchestrator"]
         
         %% Agent Tools
-        D <-->|Tool: pgvector_kb| E["🗄️ PostgreSQL (Internal Docs)"]
-        D <-->|Tool: ms_learn_mcp| F["🔌 Learn Catalog MCP Server"]
-        D <-->|Tool: ms_official_mcp| F4["🌐 Live Microsoft MCP Server"]
-        F <-->|REST API| F2["🌐 Microsoft Learn Platform"]
+        D <-->|Tool: search_historical_graph_knowledge| E["🕸️ Neo4j Graph DB (Internal Tickets & IT Assets)"]
+        D <-->|Tool: search_official_microsoft_documentation| F["🔌 Live Microsoft Docs MCP"]
+        D <-->|Tool: search_microsoft_training_catalog| F4["🎓 MS Learn Catalog MCP"]
+        F4 <-->|REST API| F2["🌐 Microsoft Learn Platform"]
         
         D -->|JSON RagVerdict| F3["⚡ Final AI Verdict"]
     end
     
     %% RAG Outcomes
-    F3 -->|Verdict: Has Solution| H["🟢 Fast Auto-Reply (with Solution)"]
-    F3 -->|Verdict: No Solution| G["📋 Azure DevOps Work Item"]
+    F3 -->|Verdict: Has Solution| H["🟢 Fast Auto-Reply (Sanitized Client Solution)"]
+    F3 -->|Verdict: No Solution| G["📋 Azure DevOps Work Item (Rich IT Recon Info)"]
 
     %% Human Routing & Infrastructure
-    G -->|State Sync| E
-    B -->|Persist Metadata| E
+    G -->|State Sync| DB["🗄️ PostgreSQL DB"]
+    B -->|Persist Metadata| DB
     
     G -->|Assign| I["👤 Assignee Notification"]
     G -->|Standard Confirmation| H
-    E -->|REST API| J["📊 Live Dashboard"]
+    DB -->|REST API| J["📊 Live Dashboard"]
     
     %% Client Validation & Feedback
     H -.->|Validation Links| K["✅/❌ Client Validation Webhook API"]
     K -->|Resolve/Re-open| G
     H -.->|Actionable Message| M["⭐ Outlook Adaptive Card Feedback"]
     M -->|Update Discussion| G
-    M -->|Persist Rating| E
+    M -->|Persist Rating| DB
 
     %% Teams Alerts
     G -->|Power Automate Webhook| L["💬 Microsoft Teams Adaptive Card"]
@@ -60,17 +60,17 @@ flowchart LR
 1. **Poll** — The worker service natively monitors a shared support Outlook mailbox every 60 seconds via the Microsoft Graph API.
 2. **Analyze** — Each new email is sent to **Groq LLM** (LLaMA 3.3 70B) which safely extracts the abstract metadata: core problem, severity, estimated resolution time, and the relevant IT Job Field.
 3. **Agentic RAG Orchestrator** — The C# worker passes the problem to a Python-based **LangGraph Agentic Orchestrator**. The Agent evaluates the request and autonomously decides which of its three tools to invoke.
-4. **Three-Tool Execution** — The Orchestrator routes the problem to:
-   - **Internal KB**: Performs a 384D vector search against PostgreSQL (`pgvector`) for simulated internal tech support.
+4. **Zero-Touch IT Reconnaissance** — At startup, the pipeline dynamically queries a **Neo4j Graph Database** using the sender's email domain to resolve their Name, Department, active corporate Asset Tag, OS Version, support ticket history risk, and tenant-hosted servers/gateways (Exchange, Active Directory, Oracle, VPN).
+5. **Three-Tool Execution** — The Orchestrator routes the problem to:
+   - **Internal KB**: Performs a Cypher lookup against Neo4j (`search_historical_graph_knowledge`) to query past resolution logs.
    - **Live Microsoft MCP**: A custom HTTP wrapper that connects to the official Microsoft MCP Server to fetch real-time, up-to-date Microsoft documentation.
    - **Custom Catalog MCP**: Communicates via standard MCP to fetch official Microsoft trainings, learning paths, and exams via Entra ID App-Only access.
-5. **Route & Create** — Based on the retrieved data, the Agent synthesizes a final JSON `RagVerdict`. An Azure DevOps **Issue** work item is created. The extracted job field is mapped against a CSV directory to identify the correct Azure DevOps assignee. (If the RAG AI resolved it, the step-by-step solution and reference URLs are also appended to this ticket's logs!)
-6. **Notify** — A professional HTML auto-reply is sent using Microsoft Graph's `.Reply` endpoint, ensuring the response stays **inside the same Outlook email thread**. If auto-resolved, this email contains a massive green highlighted box with the exact solution and Microsoft URLs. Concurrently, a separate Custom Notification email is dispatched to the IT Assignee to alert them of the ticket.
-7. **Attach** — Any **inline images** (screenshots) and **file attachments** (PDFs, logs) are automatically extracted from the email via Graph API and uploaded directly to the ADO Work Item.
-8. **Teams Alert** — An **Adaptive Card** is immediately fired to the correct Microsoft Teams channel (mapped per job field via Power Automate Webhooks), displaying ticket details, priority, status, and a direct ADO link — color-coded 🟢 green for RAG-resolved or 🟠 orange for human-assigned tickets.
-9. **Track & Sync** — Every ticket and state transition is comprehensively persisted to PostgreSQL. State-change notifications (e.g., "Done") are sent as **replies in the original thread** by looking up the stored `MessageId`. A standalone vanilla web dashboard queries this DB periodically to display real-time pipeline stats.
-10. **Thread Detection** — When a client **replies** to the bot's email with additional context, the system detects the shared `ConversationId`, uses the **LLM to summarize** the follow-up (e.g., *"The client reported that the issue persists after rebooting..."*), and appends it as a styled comment to the existing ADO Work Item — **no duplicate ticket created**.
-11. **Interactive Feedback** — When a ticket is marked as Done/Closed in ADO, the worker syncs the state and sends a closure email containing an **Outlook Actionable Message (Adaptive Card)**. Clients can rate the support directly inside Outlook, instantly logging their feedback to the PostgreSQL database and appending a beautiful HTML summary to the Azure DevOps Work Item discussion.
+6. **Route & Create** — Based on the retrieved data, the Agent synthesizes a final JSON `RagVerdict`. An Azure DevOps **Issue** work item is created containing the full **IT Reconnaissance** block (laptop tags, server gateways) in the description for the IT Engineer.
+7. **Client Telemetry Sanitization** — Before sending the professional HTML auto-reply to the client, a C# line-skipping parser **automatically strips out** internal corporate metadata (gateways, laptops, ticket history) to prevent security leaks, ensuring the end-client only receives clean Microsoft-approved steps.
+8. **Threaded Auto-Reply** — The HTML response is sent using Microsoft Graph's `.Reply` endpoint, ensuring all communication remains strictly **inside the same Outlook thread**.
+9. **Teams Alert** — An **Adaptive Card** is fired to the correct Microsoft Teams channel displaying ticket details, priority, and a direct ADO link — color-coded 🟢 green for RAG-resolved or 🟠 orange for human-assigned tickets.
+10. **Thread Tracking & Sync** — Follow-up replies to the bot are detected via `ConversationId`. The Groq LLM summarizes the reply and appends it as a styled comment to the ADO Work Item — **no duplicate ticket created**.
+11. **Interactive Feedback** — Star rating (1-5) and feedback forms are embedded directly in closure emails as **Outlook Actionable Messages (Adaptive Cards)**, persisting ratings in PostgreSQL and sync'ing them to the ADO discussion board.
 
 ---
 
@@ -79,9 +79,12 @@ flowchart LR
 | Feature | Description |
 |---|---|
 | 🤖 **AI Email Analysis** | Groq LLM extracts problem, severity, department, and resolution estimate |
-| 🧠 **Agentic RAG Orchestrator** | LangGraph-powered intelligent routing that autonomously selects knowledge tools |
-| 🔌 **Model Context Protocol (MCP)** | Custom MCP Server bridging the Groq LLM securely to live Microsoft REST APIs |
-| 🗄️ **Local Vector Engine** | Offline, quota-free vector similarity search using PostgreSQL `pgvector` |
+| 🕸️ **Neo4j Graph RAG** | Explores complex relationships between Tenants, Users, IT Assets, and Past Support Tickets |
+| 🛡️ **Zero-Touch IT Recon** | Dynamic pre-resolution telemetry mapping users to active laptops, OS versions, and organization gateways |
+| 🔒 **Backend-Enforced RLS** | Strictly isolates multi-tenant data using Cypher parameters matching the sender's verified email domain |
+| 🫧 **Client Telemetry Sanitizer** | Smart line-skipping C# parser that filters out internal server topology/asset tags before emailing clients |
+| 🧠 **LangGraph Orchestrator** | Multi-tool ReAct agent utilizing standard LangChain structures for dynamic, real-time routing |
+| 🔌 **Model Context Protocol (MCP)** | Stdio and HTTP-based MCP servers exposing live Microsoft documentation and catalogs to the agent |
 | ⚡ **AI Auto-Resolution** | Instantly solves level-1 issues by citing official docs and live MS Learn modules |
 | 📋 **Auto Work Item Creation** | Creates Azure DevOps Issues with priority, assignee, and metadata |
 | 🔀 **Intelligent Routing** | CSV-based job field → assignee mapping with fallback defaults |
@@ -94,7 +97,6 @@ flowchart LR
 | 🔄 **State Sync** | Polls ADO board and sends status update emails as replies in the original thread |
 | 🗄️ **Full Audit Trail** | PostgreSQL database tracks every ticket and state transition |
 | ⭐ **Outlook Actionable Messages** | In-email Adaptive Card feedback forms synced directly to Azure DevOps history |
-| 🛡️ **Graceful Fallback** | If the AI is unsure, the ticket safely generates as normal for a human agent |
 
 ---
 
@@ -102,12 +104,12 @@ flowchart LR
 
 - **Runtime**: .NET 10.0 (Web SDK) + Python 3 (Virtual Environment)
 - **Agentic Framework**: LangChain / LangGraph + Model Context Protocol (MCP) SDK
-- **Vector Search Engine**: `sentence-transformers` (`all-MiniLM-L6-v2`) + Python `requests`
+- **Graph Database**: Neo4j Graph DB (Multi-Tenant Graph RAG + IT Asset Mapping)
 - **Email Integration**: Microsoft Graph SDK v5
 - **Teams Integration**: Power Automate Webhooks (Adaptive Cards v1.4 via `HttpClient`)
 - **Work Items**: Azure DevOps REST API (`Microsoft.TeamFoundationServer.Client`)
 - **AI/LLM**: Groq API (LLaMA 3.3 70B Versatile)
-- **Database**: PostgreSQL with `pgvector` Plugin + Entity Framework Core 8
+- **Relational Audit DB**: PostgreSQL + Entity Framework Core 8
 - **Auth**: Azure AD Client Credentials (`Azure.Identity`)
 - **Frontend**: Vanilla HTML/CSS/JS dashboard (served via Kestrel static files)
 
@@ -282,11 +284,12 @@ PFE/
 - [x] **Real-Time Event Streaming** — `Server-Sent Events (SSE)` broadcasting live granular pipeline logs directly to the browser dashboard, secured via secret keys.
 - [x] **Lightweight Authentication** — Dashboard UI protected by a session-based password prompt (`sessionStorage`), actively blocking unauthorized clients from snooping on the root URL.
 
-### Phase 14 — Agentic RAG Architecture Upgrade
-- [x] **LangGraph Orchestrator** — Replaced linear C# vector search with a Python-based `create_react_agent` LLM orchestrator capable of multi-tool reasoning and routing.
-- [x] **Model Context Protocol (MCP)** — Built `learn_catalog_mcp.py` to securely expose Entra ID-authenticated Microsoft APIs to the LLM via standard `stdio`.
-- [x] **Microsoft Learn API Integration** — Implemented intelligent keyword scoring to query live MS Learn modules, paths, and certifications.
-- [x] **Context/Credential Injection** — Passed `.NET User Secrets` dynamically into the Python process environment to ensure secure, `.env`-free execution.
+### Phase 14 — Agentic Graph RAG & Neo4j Multi-Tenant Security
+- [x] **Neo4j Graph Database** — Replaced `pgvector` with a Neo4j Graph Database to map complex, multi-hop relationships between Tenants, Users, Assets, Departments, and Historical Tickets.
+- [x] **LangGraph Orchestrator** — Deployed a Python-based `create_react_agent` LLM orchestrator capable of multi-tool reasoning and routing.
+- [x] **Backend-Enforced RLS (Row-Level Security)** — The C# backend securely extracts the sender's email domain and forcibly injects it into the Python process. The Orchestrator uses a strict Cypher template (`MATCH (tic:Ticket)-[:BELONGS_TO]->(t:Tenant {domain: $domain})`) to physically isolate Graph queries, ensuring zero cross-tenant data leaks.
+- [x] **"Self-Service Aware" Destination Routing** — The Agent follows a strict destination protocol: Internal Graph RAG hits are quietly injected into the ADO Work Item for the IT Engineer (`hasSolution: false`), while official Microsoft MCP hits are sent directly to the client as step-by-step guides (`hasSolution: true`).
+- [x] **Model Context Protocol (MCP)** — Built `learn_catalog_mcp.py` to securely expose Entra ID-authenticated Microsoft APIs to the LLM via standard `stdio`, and integrated the live official Microsoft Docs MCP server.
 
 ### Phase 15 — Advanced Email Handling
 - [x] **ConversationId Thread Tracking** — Store MS Graph `ConversationId` on every ticket with a database index. Follow-up replies to the same thread are detected and matched to existing tickets, preventing duplicate Work Item creation.
