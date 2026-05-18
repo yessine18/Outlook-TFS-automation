@@ -425,6 +425,7 @@ public class MailPollingService : BackgroundService
             {
                 ragVerdict = await _llmService.EvaluateRagSolutionAsync(
                     extractedData.DetailedDescription, 
+                    senderEmail,
                     cancellationToken);
 
                 if (ragVerdict.HasSolution && ragVerdict.ConfidenceScore > 0.70)
@@ -433,9 +434,22 @@ public class MailPollingService : BackgroundService
                     _logger.LogInformation("🎯 PERFECT MATCH! AI Found a solution with Confidence: {Conf}", ragVerdict.ConfidenceScore);
                     
                     // Prepend the AI solution to the detailed description so Azure DevOps logs it clearly!
+                    var cleanSolution = System.Web.HttpUtility.HtmlEncode(ragVerdict.ProposedSolution).Replace("\n", "<br>");
                     extractedData.DetailedDescription = $"<h3>🤖 AI AUTO-RESOLVED SOLUTION 🤖</h3>" +
-                                                        $"<p><strong>Solution:</strong> {System.Web.HttpUtility.HtmlEncode(ragVerdict.ProposedSolution)}</p>" +
+                                                        $"<p><strong>Solution:</strong><br>{cleanSolution}</p>" +
                                                         $"<p><strong>References:</strong><br>{string.Join("<br>", ragVerdict.ReferenceUrls)}</p><hr><br>" + 
+                                                        extractedData.DetailedDescription;
+                }
+                else if (!string.IsNullOrEmpty(ragVerdict.ProposedSolution) && 
+                         ragVerdict.ToolUsed.Contains("search_historical_graph_knowledge") &&
+                         !ragVerdict.ProposedSolution.Contains("No historical data found"))
+                {
+                    // IT-ONLY HISTORICAL FIX! We don't send this to the client (HasSolution = false),
+                    // but we MUST inject it into the ADO ticket and IT engineer email!
+                    _logger.LogInformation("🔧 IT-Only Solution found. Injecting into ADO WorkItem description.");
+                    var cleanSolution = System.Web.HttpUtility.HtmlEncode(ragVerdict.ProposedSolution).Replace("\n", "<br>");
+                    extractedData.DetailedDescription = $"<h3>🔧 AI HISTORICAL IT FIX (DO NOT SHARE WITH CLIENT) 🔧</h3>" +
+                                                        $"<p><strong>Historical Resolution:</strong><br>{cleanSolution}</p><hr><br>" + 
                                                         extractedData.DetailedDescription;
                 }
             }
@@ -805,10 +819,36 @@ public class MailPollingService : BackgroundService
           if (ragVerdict != null && ragVerdict.HasSolution && ragVerdict.ConfidenceScore > 0.70)
           {
               var refs = string.Join("<br>", ragVerdict.ReferenceUrls.Select(url => $"<a href='{url}' style='color: #16a34a;'>{url}</a>"));
+              
+              var clientSolution = ragVerdict.ProposedSolution;
+              if (clientSolution.Contains("=== AI GRAPH RECONNAISSANCE ==="))
+              {
+                  var gatewaysIndex = clientSolution.IndexOf("- Tenant Servers/Gateways:");
+                  if (gatewaysIndex != -1)
+                  {
+                      var newlineIndex = clientSolution.IndexOf('\n', gatewaysIndex);
+                      if (newlineIndex != -1)
+                      {
+                          clientSolution = clientSolution.Substring(newlineIndex + 1).Trim();
+                          
+                          // If the LLM included a separator line like equal signs or hyphens, strip it as well
+                          if (clientSolution.StartsWith("=") || clientSolution.StartsWith("-") || clientSolution.StartsWith("*"))
+                          {
+                              var separatorNewline = clientSolution.IndexOf('\n');
+                              if (separatorNewline != -1)
+                              {
+                                  clientSolution = clientSolution.Substring(separatorNewline + 1).Trim();
+                              }
+                          }
+                      }
+                  }
+              }
+              var escapedSolution = System.Web.HttpUtility.HtmlEncode(clientSolution).Replace("\n", "<br>");
+
               aiSolutionHtml = $@"
               <div style='background-color: #dcfce7; border: 1px solid #22c55e; border-radius: 8px; padding: 24px; margin: 0 32px 24px; text-align: left;'>
                   <h3 style='color: #166534; margin-bottom: 12px; font-size: 18px;'>🤖 We have an instant solution for your issue!</h3>
-                  <p style='color: #15803d; font-size: 15px; margin-bottom: 16px; line-height: 1.5;'>{System.Web.HttpUtility.HtmlEncode(ragVerdict.ProposedSolution).Replace("\n", "<br>")}</p>
+                  <p style='color: #15803d; font-size: 15px; margin-bottom: 16px; line-height: 1.5;'>{escapedSolution}</p>
                   
                   <div style='margin-top: 24px; margin-bottom: 24px; padding: 16px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: center;'>
                       <p style='color: #166534; font-size: 14px; font-weight: bold; margin-bottom: 16px;'>Did this AI solution solve your problem?</p>

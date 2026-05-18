@@ -185,11 +185,11 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
         };
     }
 
-    public async Task<RagVerdict> EvaluateRagSolutionAsync(string detailedDescription, CancellationToken cancellationToken)
+    public async Task<RagVerdict> EvaluateRagSolutionAsync(string detailedDescription, string senderEmail, CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("Starting Agentic RAG Orchestrator for description...");
+            _logger.LogInformation("Starting Agentic RAG Orchestrator for description from {Email}...", senderEmail);
             
             var pythonPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\.venv\Scripts\python.exe";
             var scriptPath = @"c:\Users\fakhf\OneDrive\Desktop\PFE\inetum-ms-kb\src\agent\orchestrator.py";
@@ -212,11 +212,16 @@ Respond with ONLY valid JSON (no markdown, no backticks, no text before or after
                 CreateNoWindow = true
             };
 
+            // Extract Domain for Graph RAG Security
+            var senderDomain = senderEmail.Split('@').LastOrDefault() ?? "m365x62207154.onmicrosoft.com";
+
             // Inject secrets from .NET Configuration directly into the Python process
             processStartInfo.EnvironmentVariables["ENTRA_TENANT_ID"] = _configuration["AzureAd:TenantId"];
             processStartInfo.EnvironmentVariables["ENTRA_CLIENT_ID"] = _configuration["AzureAd:ClientId"];
             processStartInfo.EnvironmentVariables["ENTRA_CLIENT_SECRET"] = _configuration["AzureAd:ClientSecret"];
             processStartInfo.EnvironmentVariables["GROQ_API_KEY"] = _configuration["Groq:ApiKey"];
+            processStartInfo.EnvironmentVariables["SENDER_DOMAIN"] = senderDomain;
+            processStartInfo.EnvironmentVariables["SENDER_EMAIL"] = senderEmail;
 
             using var process = Process.Start(processStartInfo);
             if (process == null) throw new Exception("Failed to start python process");
